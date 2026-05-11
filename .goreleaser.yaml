@@ -121,9 +121,7 @@ changelog:
       - "^test:"
       - "^ci:"
 
-# Homebrew tap at github.com/obay/homebrew-tap. Creates two formulas:
-# obcmd (operator CLI) and obcmd-agent (the agent — useful on Mac
-# for testing or if you have a non-Windows target).
+# Homebrew tap at github.com/obay/homebrew-tap.
 brews:
   - name: obcmd
     ids: [obcmd-cli]
@@ -139,6 +137,32 @@ brews:
       bin.install "obcmd"
     test: |
       system "#{bin}/obcmd", "version"
+
+  - name: obcmdd
+    ids: [obcmdd]
+    repository:
+      owner: obay
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/obay/obcmd
+    description: HTTPS relay for the obcmd remote-exec system
+    license: MIT
+    install: |
+      bin.install "obcmdd"
+      (etc/"obcmd").mkpath
+      pkgshare.install "config.example.obcmdd.toml"
+      pkgshare.install "deploy/obcmdd.service" if File.exist?("deploy/obcmdd.service")
+    caveats: |
+      Config example: #{HOMEBREW_PREFIX}/share/obcmdd/config.example.obcmdd.toml
+      Copy to #{HOMEBREW_PREFIX}/etc/obcmd/obcmdd.toml and edit before starting.
+    service: |
+      run [opt_bin/"obcmdd", "serve", "--config", etc/"obcmd/obcmdd.toml"]
+      keep_alive true
+      log_path var/"log/obcmdd.log"
+      error_log_path var/"log/obcmdd.err.log"
+    test: |
+      system "#{bin}/obcmdd", "version"
 
 # obcmd-agent is Windows-only; no Homebrew formula.
 

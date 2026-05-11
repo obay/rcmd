@@ -75,7 +75,13 @@ The agent is built for Windows amd64 only — that's the SPS Dell.
 
 ### VPS / Linux (relay)
 
-Download the deb/rpm from the [latest release](https://github.com/obay/obcmd/releases), or:
+Via Homebrew (works on macOS and Linuxbrew):
+
+```sh
+brew install obay/tap/obcmdd
+```
+
+Or grab the deb/rpm from the [latest release](https://github.com/obay/obcmd/releases):
 
 ```sh
 curl -L https://github.com/obay/obcmd/releases/latest/download/obcmdd_<ver>_linux_amd64.tar.gz | tar -xz
