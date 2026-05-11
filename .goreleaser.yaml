@@ -1,0 +1,176 @@
+# GoReleaser config for obcmd.
+#
+# Builds three binaries (obcmdd, obcmd, obcmd-agent) for the
+# platforms each one actually runs on, ships archives + deb/rpm to
+# GitHub Releases, and publishes Homebrew + Scoop manifests to your
+# personal taps at github.com/obay.
+#
+# Tagging: tag a release with `git tag v0.1.0 && git push --tags`, then
+# `goreleaser release --clean`.
+
+version: 2
+
+project_name: obcmd
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  # obcmdd — the relay. Runs on the VPS only.
+  - id: obcmdd
+    main: ./cmd/obcmdd
+    binary: obcmdd
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+  # obcmd — the operator CLI. Runs anywhere a human types.
+  - id: obcmd
+    main: ./cmd/obcmd
+    binary: obcmd
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+  # obcmd-agent — the remote-exec agent. Ships ONLY for Windows amd64
+  # (that's the SPS Dell). The source still cross-compiles to darwin/
+  # linux via build tags for local development, but we don't release
+  # those artifacts.
+  - id: obcmd-agent
+    main: ./cmd/obcmd-agent
+    binary: obcmd-agent
+    env:
+      - CGO_ENABLED=0
+    goos: [windows]
+    goarch: [amd64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: obcmd-cli
+    ids: [obcmd]
+    name_template: "obcmd_{{.Version}}_{{.Os}}_{{.Arch}}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE*
+      - config.example.obcmd.toml
+
+  - id: obcmd-agent
+    ids: [obcmd-agent]
+    name_template: "obcmd-agent_{{.Version}}_{{.Os}}_{{.Arch}}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE*
+      - config.example.obcmd-agent.toml
+      - deploy/install-agent.ps1
+
+  - id: obcmdd
+    ids: [obcmdd]
+    name_template: "obcmdd_{{.Version}}_{{.Os}}_{{.Arch}}"
+    formats: [tar.gz]
+    files:
+      - README.md
+      - LICENSE*
+      - config.example.obcmdd.toml
+      - deploy/obcmdd.service
+
+nfpms:
+  - id: obcmdd-deb
+    package_name: obcmdd
+    builds: [obcmdd]
+    vendor: obay
+    homepage: https://github.com/obay/obcmd
+    maintainer: obay <ahmad.obay@gmail.com>
+    description: obcmd relay server
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/local/bin
+    contents:
+      - src: deploy/obcmdd.service
+        dst: /lib/systemd/system/obcmdd.service
+      - src: config.example.obcmdd.toml
+        dst: /etc/obcmd/obcmdd.toml.example
+        type: config
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+# Homebrew tap at github.com/obay/homebrew-tap. Creates two formulas:
+# obcmd (operator CLI) and obcmd-agent (the agent — useful on Mac
+# for testing or if you have a non-Windows target).
+brews:
+  - name: obcmd
+    ids: [obcmd-cli]
+    repository:
+      owner: obay
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/obay/obcmd
+    description: Operator CLI for the obcmd remote-exec relay
+    license: MIT
+    install: |
+      bin.install "obcmd"
+    test: |
+      system "#{bin}/obcmd", "version"
+
+# obcmd-agent is Windows-only; no Homebrew formula.
+
+# Scoop bucket at github.com/obay/scoop-bucket. Windows users install
+# the agent with: scoop bucket add obay https://github.com/obay/scoop-bucket
+# then `scoop install obay/obcmd-agent`.
+scoops:
+  - name: obcmd-agent
+    ids: [obcmd-agent]
+    repository:
+      owner: obay
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/obay/obcmd
+    description: obcmd remote-execution agent (Windows service)
+    license: MIT
+
+  - name: obcmd
+    ids: [obcmd-cli]
+    repository:
+      owner: obay
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/obay/obcmd
+    description: obcmd operator CLI
+    license: MIT
+
+release:
+  github:
+    owner: obay
+    name: obcmd
+  draft: false
+  prerelease: auto

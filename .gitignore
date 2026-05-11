@@ -1,0 +1,21 @@
+# Built binaries (cmd/<name> compiled to ./<name> by `go build`)
+/obcmd
+/obcmdd
+/obcmd-agent
+/obcmd.exe
+/obcmdd.exe
+/obcmd-agent.exe
+
+# Local configs (real keys never go in git)
+/obcmdd.toml
+/agent.toml
+/config.toml
+*.local.toml
+
+# GoReleaser output
+/dist/
+
+# Editor / OS junk
+.DS_Store
+.vscode/
+.idea/

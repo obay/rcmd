@@ -1,0 +1,21 @@
+# obcmd-agent — agent config
+# Path: C:\ProgramData\obcmd\agent.toml         (Windows)
+#       /etc/obcmd/agent.toml                   (Linux)
+#       /usr/local/etc/obcmd/agent.toml         (macOS)
+
+relay_url = "https://ai.obay.cloud"
+agent_id  = "sps-dell"
+
+# Pre-shared keys (base64, 32 bytes each).
+# agent_key   — shared with the relay (NOT with the operator).
+# payload_key — shared with the operator (NOT with the relay).
+# Generate fresh keys with:  obcmd-agent keygen --count 2
+agent_key   = ""
+payload_key = ""
+
+# Where the agent writes its log. Use "-" to log to stderr only.
+log_file = "C:\\ProgramData\\obcmd\\agent.log"
+
+# Default shell when the operator doesn't pass --shell.
+# Windows: cmd | powershell.  Linux/macOS: sh | pwsh.
+default_shell = "cmd"
