@@ -63,7 +63,6 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - config.example.rcmd.toml
 
   - id: rcmd-agent
     ids: [rcmd-agent]
@@ -75,8 +74,6 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - config.example.rcmd-agent.toml
-      - deploy/install-agent.ps1
 
   - id: rcmdd
     ids: [rcmdd]
@@ -85,7 +82,6 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - config.example.rcmdd.toml
       - deploy/rcmdd.service
 
 nfpms:
@@ -102,9 +98,6 @@ nfpms:
     contents:
       - src: deploy/rcmdd.service
         dst: /lib/systemd/system/rcmdd.service
-      - src: config.example.rcmdd.toml
-        dst: /etc/rcmd/rcmdd.toml.example
-        type: config
 
 checksum:
   name_template: checksums.txt
@@ -149,14 +142,14 @@ brews:
     license: MIT
     install: |
       bin.install "rcmdd"
-      (etc/"rcmd").mkpath
-      pkgshare.install "config.example.rcmdd.toml"
       pkgshare.install "deploy/rcmdd.service" if File.exist?("deploy/rcmdd.service")
     caveats: |
-      Config example: #{HOMEBREW_PREFIX}/share/rcmdd/config.example.rcmdd.toml
-      Copy to #{HOMEBREW_PREFIX}/etc/rcmd/rcmdd.toml and edit before starting.
+      Run once before starting the service:
+        sudo rcmdd init --domain relay.example.com
+      Then:
+        brew services start rcmdd
     service: |
-      run [opt_bin/"rcmdd", "serve", "--config", etc/"rcmd/rcmdd.toml"]
+      run [opt_bin/"rcmdd", "serve"]
       keep_alive true
       log_path var/"log/rcmdd.log"
       error_log_path var/"log/rcmdd.err.log"

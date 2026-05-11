@@ -1,0 +1,128 @@
+package main
+
+import (
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/obay/rcmd/internal/crypto"
+	"github.com/obay/rcmd/internal/state"
+	"github.com/obay/rcmd/internal/token"
+	"github.com/spf13/cobra"
+)
+
+func newInitCmd() *cobra.Command {
+	var (
+		domain       string
+		acmeEmail    string
+		acmeCacheDir string
+		listenAddr   string
+		insecure     bool
+		insecureAddr string
+		force        bool
+	)
+	cmd := &cobra.Command{
+		Use:          "init",
+		Short:        "First-time relay setup: generate keys, write state, print join token",
+		SilenceUsage: true,
+		Long: strings.TrimSpace(`
+init creates the relay state file at /etc/rcmd/rcmdd.json (or the path
+given via --state). It generates a fresh master secret, persists the
+relay's domain + TLS settings, and prints the join token that you paste
+into 'rcmd-agent join' and 'rcmd join' on the other machines.
+
+Refuses to run if a state file already exists; pass --force to overwrite
+(which is destructive — all existing agents and operators will be
+locked out until they re-join with the new token).
+
+Examples:
+  sudo rcmdd init --domain relay.example.com
+  sudo rcmdd init --domain relay.example.com --acme-email you@example.com
+  sudo rcmdd init --insecure
+`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if insecure && domain != "" {
+				return errors.New("--insecure and --domain are mutually exclusive")
+			}
+			if !insecure && domain == "" {
+				return errors.New("--domain is required (or pass --insecure for plain-HTTP mode)")
+			}
+			if state.Exists(statePath) && !force {
+				return fmt.Errorf("state file already exists at %s — use --force to overwrite (destructive)", statePath)
+			}
+
+			master, err := crypto.NewMasterSecret()
+			if err != nil {
+				return fmt.Errorf("generate master secret: %w", err)
+			}
+			masterB64 := base64.StdEncoding.EncodeToString(master)
+
+			s := &state.RelayState{
+				MasterSecret: masterB64,
+				Agents:       map[string]state.Identity{},
+				Operators:    map[string]state.Identity{},
+			}
+			if insecure {
+				s.TLSMode = "insecure"
+				s.InsecureAddr = insecureAddr
+			} else {
+				s.TLSMode = "autocert"
+				s.Domain = domain
+				s.ListenAddr = listenAddr
+				s.ACMECacheDir = acmeCacheDir
+				s.ACMEEmail = acmeEmail
+			}
+
+			if err := state.SaveRelay(statePath, s); err != nil {
+				return fmt.Errorf("save state: %w", err)
+			}
+
+			joinURL := relayURL(s)
+			tok, err := token.Mint(token.Token{RelayURL: joinURL, MasterSecret: masterB64})
+			if err != nil {
+				return fmt.Errorf("mint token: %w", err)
+			}
+
+			fmt.Printf("Wrote %s\n", statePath)
+			fmt.Println()
+			fmt.Println("Join token:")
+			fmt.Println()
+			fmt.Printf("  %s\n", tok)
+			fmt.Println()
+			fmt.Println("Next steps:")
+			fmt.Println()
+			fmt.Println("  1. Start the relay service:")
+			fmt.Println("       sudo systemctl enable --now rcmdd     # if installed from .deb")
+			fmt.Println("       brew services start rcmdd             # if installed via brew")
+			fmt.Println()
+			fmt.Println("  2. On each Windows agent (elevated PowerShell):")
+			fmt.Println("       rcmd-agent join <token>")
+			fmt.Println()
+			fmt.Println("  3. On each operator machine:")
+			fmt.Println("       rcmd join <token>")
+			fmt.Println()
+			fmt.Println("Anyone with this token can join the relay. Treat it like a secret.")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&domain, "domain", "", "public hostname for autocert (e.g. relay.example.com)")
+	cmd.Flags().StringVar(&acmeEmail, "acme-email", "", "contact email passed to Let's Encrypt (optional)")
+	cmd.Flags().StringVar(&acmeCacheDir, "acme-cache-dir", "/var/lib/rcmd/autocert", "directory for the Let's Encrypt cert cache")
+	cmd.Flags().StringVar(&listenAddr, "listen-addr", ":443", "HTTPS listen address (autocert mode)")
+	cmd.Flags().BoolVar(&insecure, "insecure", false, "plain-HTTP mode (no TLS, no domain) — testing / trusted networks only")
+	cmd.Flags().StringVar(&insecureAddr, "insecure-addr", ":8080", "plain-HTTP listen address when --insecure is set")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing state file (destructive)")
+	return cmd
+}
+
+// relayURL builds the canonical join-URL for the relay based on its
+// TLS mode. For insecure mode the user is expected to substitute the
+// actual host themselves — we print http://<hostname>:port and they
+// can adjust.
+func relayURL(s *state.RelayState) string {
+	if s.TLSMode == "insecure" {
+		return "http://<this-host>" + s.InsecureAddr
+	}
+	return "https://" + s.Domain
+}

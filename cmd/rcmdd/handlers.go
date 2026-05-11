@@ -5,27 +5,35 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/obay/rcmd/internal/api"
 	"github.com/obay/rcmd/internal/auth"
 	"github.com/obay/rcmd/internal/queue"
+	"github.com/obay/rcmd/internal/state"
 )
 
 type server struct {
-	store    *queue.Store
-	keys     map[string][]byte // identity -> hmac key
-	nonces   *auth.NonceCache
-	agentIDs map[string]bool // allowed agent IDs
-	log      *log.Logger
+	state   *state.RelayState
+	store   *queue.Store
+	hmacKey []byte
+	nonces  *auth.NonceCache
+	log     *log.Logger
+
+	dirtyMu *sync.Mutex
+	dirty   bool
+	seenMu  sync.Mutex // guards state.Agents / state.Operators
 }
 
 func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.healthz)
-	mux.HandleFunc("POST /v1/agents/{id}/commands", s.requireOperator(s.submitCommand))
-	mux.HandleFunc("GET /v1/agents/{id}/commands/{cid}/result", s.requireOperator(s.getResult))
-	mux.HandleFunc("GET /v1/agents/{id}/poll", s.requireAgent(s.poll))
-	mux.HandleFunc("POST /v1/agents/{id}/results/{cid}", s.requireAgent(s.postResult))
+	// Operator-initiated:
+	mux.HandleFunc("POST /v1/agents/{id}/commands", s.auth(s.recordOperator(s.submitCommand)))
+	mux.HandleFunc("GET /v1/agents/{id}/commands/{cid}/result", s.auth(s.recordOperator(s.getResult)))
+	// Agent-initiated:
+	mux.HandleFunc("GET /v1/agents/{id}/poll", s.auth(s.recordAgent(s.poll)))
+	mux.HandleFunc("POST /v1/agents/{id}/results/{cid}", s.auth(s.recordAgent(s.postResult)))
 }
 
 func (s *server) healthz(w http.ResponseWriter, r *http.Request) {
@@ -33,42 +41,58 @@ func (s *server) healthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.WriteString(w, "ok\n")
 }
 
-func (s *server) requireOperator(h http.HandlerFunc) http.HandlerFunc {
-	return s.requireIdentity(api.IdentityOperator, h)
-}
-
-func (s *server) requireAgent(h http.HandlerFunc) http.HandlerFunc {
-	return s.requireIdentity(api.IdentityAgent, h)
-}
-
-func (s *server) requireIdentity(want string, h http.HandlerFunc) http.HandlerFunc {
+// auth wraps a handler with HMAC verification. On success, stashes the
+// request body bytes and the self-declared identity in the context so
+// the inner handler can read them.
+func (s *server) auth(h func(w http.ResponseWriter, r *http.Request, identity string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Read body; bounded by Content-Length and our caps.
 		r.Body = http.MaxBytesReader(w, r.Body, api.MaxFileBytes+1024*1024)
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "body too large or unreadable", http.StatusRequestEntityTooLarge)
 			return
 		}
-		identity, err := auth.Verify(r, body, s.keys, s.nonces)
+		identity, err := auth.Verify(r, body, s.hmacKey, s.nonces)
 		if err != nil {
 			s.log.Printf("auth reject %s %s: %v", r.Method, r.URL.Path, err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if identity != want {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		agentID := r.PathValue("id")
-		if !s.agentIDs[agentID] {
-			http.Error(w, "unknown agent", http.StatusNotFound)
-			return
-		}
-		// Stash body for handler.
 		ctx := withBody(r.Context(), body)
-		h(w, r.WithContext(ctx))
+		h(w, r.WithContext(ctx), identity)
 	}
+}
+
+// recordOperator notes that the named operator showed up. Pure
+// observability; does not affect routing.
+func (s *server) recordOperator(h func(w http.ResponseWriter, r *http.Request)) func(http.ResponseWriter, *http.Request, string) {
+	return func(w http.ResponseWriter, r *http.Request, identity string) {
+		s.touch(s.state.Operators, identity)
+		h(w, r)
+	}
+}
+
+// recordAgent notes that the named agent showed up.
+func (s *server) recordAgent(h func(w http.ResponseWriter, r *http.Request)) func(http.ResponseWriter, *http.Request, string) {
+	return func(w http.ResponseWriter, r *http.Request, identity string) {
+		s.touch(s.state.Agents, identity)
+		h(w, r)
+	}
+}
+
+func (s *server) touch(m map[string]state.Identity, name string) {
+	s.seenMu.Lock()
+	defer s.seenMu.Unlock()
+	id, ok := m[name]
+	now := time.Now().UTC()
+	if !ok {
+		id.FirstSeen = now
+	}
+	id.LastSeen = now
+	m[name] = id
+	s.dirtyMu.Lock()
+	s.dirty = true
+	s.dirtyMu.Unlock()
 }
 
 func (s *server) submitCommand(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +111,7 @@ func (s *server) getResult(w http.ResponseWriter, r *http.Request) {
 	env, ok := s.store.WaitResult(r.PathValue("id"), r.PathValue("cid"),
 		time.Duration(api.ResultTimeoutSeconds)*time.Second)
 	if !ok {
-		w.WriteHeader(http.StatusAccepted) // 202 still running
+		w.WriteHeader(http.StatusAccepted)
 		return
 	}
 	writeJSON(w, http.StatusOK, api.ResultResponse{Status: "done", Envelope: env})
@@ -97,7 +121,7 @@ func (s *server) poll(w http.ResponseWriter, r *http.Request) {
 	cid, env, ok := s.store.Poll(r.PathValue("id"),
 		time.Duration(api.PollTimeoutSeconds)*time.Second)
 	if !ok {
-		w.WriteHeader(http.StatusNoContent) // 204
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	writeJSON(w, http.StatusOK, api.PollResponse{CommandID: cid, Envelope: env})

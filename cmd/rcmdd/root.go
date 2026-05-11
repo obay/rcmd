@@ -7,75 +7,60 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/obay/rcmd/internal/state"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-const defaultConfigPath = "/etc/rcmd/rcmdd.toml"
-
-var cfgFile string
+var statePath string
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "rcmdd",
 		Short: "rcmd relay server",
 		Long: strings.TrimSpace(`
-rcmdd is the rcmd relay server. It runs on a Linux host at a domain
-you own and brokers encrypted commands between the rcmd operator CLI
-and the rcmd-agent (Windows).
+rcmdd is the rcmd relay server. It runs on a Linux host and brokers
+encrypted commands between the rcmd operator CLI and the rcmd-agent
+(Windows).
 
-The relay only ever sees encrypted envelopes — command text, file
-contents, and output never appear in cleartext on the relay. All
-parties authenticate to the relay with HMAC-signed requests.
+First-time setup on the relay host:
 
-Typical workflow:
-  rcmdd keygen                # generate keys
-  rcmdd serve                 # run the server
+  sudo rcmdd init --domain relay.example.com
+  sudo systemctl enable --now rcmdd     # or: brew services start rcmdd
+
+Day-2 ops:
+
+  rcmdd token       # print the current join token
+  rcmdd list        # show seen operators + agents
+  rcmdd rekey       # rotate the master secret (invalidates everyone)
+  rcmdd forget X    # remove a name from the seen list
+  rcmdd status      # health check
+
+The 'serve' subcommand is invoked by systemd / brew services; it is
+not meant to be run by humans.
 `),
 		SilenceUsage: true,
 	}
-	root.PersistentFlags().StringVar(&cfgFile, "config", "",
-		fmt.Sprintf("config file (default %s)", defaultConfigPath))
+	root.PersistentFlags().StringVar(&statePath, "state", state.DefaultRelayPath(),
+		"path to rcmdd.json state file")
 
-	root.AddCommand(newServeCmd(), newDoctorCmd(), newConfigCmd(), newKeygenCmd(), newVersionCmd())
+	root.AddCommand(
+		newInitCmd(),
+		newServeCmd(),
+		newTokenCmd(),
+		newRekeyCmd(),
+		newListCmd(),
+		newForgetCmd(),
+		newStatusCmd(),
+		newVersionCmd(),
+	)
 	return root
-}
-
-func initConfig() error {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.SetConfigFile(defaultConfigPath)
-	}
-	viper.SetEnvPrefix("RCMDD")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-
-	viper.SetDefault("listen_addr", ":443")
-	viper.SetDefault("acme_cache_dir", "/var/lib/rcmd/autocert")
-	viper.SetDefault("agent_ids", []string{"win-host"})
-	viper.SetDefault("insecure", false)
-	viper.SetDefault("insecure_addr", ":8080")
-
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("read config %s: %w", viper.ConfigFileUsed(), err)
-	}
-	return nil
 }
 
 func newVersionCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
-		Use:   "version",
-		Short: "Print build info and exit",
-		Long: strings.TrimSpace(`
-DESCRIPTION
-  Print binary version and Go toolchain version.
-
-EXAMPLES
-  rcmdd version
-  rcmdd version --json
-`),
+		Use:          "version",
+		Short:        "Print build info and exit",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			info, _ := debug.ReadBuildInfo()
@@ -94,7 +79,7 @@ EXAMPLES
 				})
 			}
 			fmt.Printf("rcmdd %s\n", version)
-			fmt.Printf("go      %s\n", gover)
+			fmt.Printf("go     %s\n", gover)
 			return nil
 		},
 	}
@@ -106,11 +91,4 @@ func emitJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
-}
-
-func last4(s string) string {
-	if len(s) <= 4 {
-		return s
-	}
-	return s[len(s)-4:]
 }

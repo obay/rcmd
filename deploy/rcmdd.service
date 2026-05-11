@@ -8,8 +8,9 @@ Wants=network-online.target
 Type=simple
 User=rcmd
 Group=rcmd
-# Edit /etc/rcmd/rcmdd.toml before starting; see rcmdd.toml.example.
-ExecStart=/usr/local/bin/rcmdd serve --config /etc/rcmd/rcmdd.toml
+# State file is /etc/rcmd/rcmdd.json. Run `sudo rcmdd init --domain X`
+# once before enabling this service.
+ExecStart=/usr/local/bin/rcmdd serve
 Restart=always
 RestartSec=2
 # Hardening
@@ -17,8 +18,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/rcmd
-# autocert needs to bind :80 and :443
+ReadWritePaths=/var/lib/rcmd /etc/rcmd
+# autocert needs to bind :443
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 LimitNOFILE=65535

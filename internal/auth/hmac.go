@@ -1,14 +1,18 @@
 // Package auth implements request signing for rcmd.
 //
-// Every authenticated request carries three headers:
+// Every authenticated request carries four headers:
 //
 //	X-Rcmd-Timestamp: <unix seconds>
 //	X-Rcmd-Nonce:     <hex 16 random bytes>
 //	X-Rcmd-Sig:       <hex HMAC-SHA256(key, METHOD\nPATH\nTS\nNONCE\nSHA256(body))>
+//	X-Rcmd-Identity:  <self-declared identity, e.g. "alice" or "win-host-1">
 //
-// The relay verifies the signature using the appropriate identity's
-// pre-shared key (agent_key or operator_key), checks the timestamp
-// window, and rejects replays via an in-memory nonce cache.
+// The relay verifies the signature against its single HMAC subkey
+// (derived via HKDF from the master secret), checks the timestamp
+// window, and rejects replays via an in-memory nonce cache. The
+// identity is observational — the relay records who showed up but
+// does not gate based on it (anyone with the master secret can claim
+// any identity).
 package auth
 
 import (
@@ -26,7 +30,7 @@ import (
 	"github.com/obay/rcmd/internal/api"
 )
 
-// Sign attaches the three auth headers to req. body is the exact bytes
+// Sign attaches the four auth headers to req. body is the exact bytes
 // of the request body (or nil for GET).
 func Sign(req *http.Request, identity string, hmacKey []byte, body []byte) error {
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
@@ -46,16 +50,17 @@ func Sign(req *http.Request, identity string, hmacKey []byte, body []byte) error
 	return nil
 }
 
-// Verify checks the auth headers on req against keys keyed by identity.
-// body must be the bytes of the request body that the handler will read
-// (caller is expected to read+buffer it before calling Verify).
+// Verify checks the auth headers on req against the single shared HMAC
+// key. body must be the bytes of the request body that the handler
+// will read (caller is expected to read+buffer it before calling).
 //
-// Returns the identity on success, or an error on failure.
-func Verify(req *http.Request, body []byte, keys map[string][]byte, nonces *NonceCache) (string, error) {
+// Returns the self-declared identity from X-Rcmd-Identity on success.
+// The identity is informational only: the relay accepts any non-empty
+// value because every party in v2 shares the same HMAC subkey.
+func Verify(req *http.Request, body []byte, hmacKey []byte, nonces *NonceCache) (string, error) {
 	identity := req.Header.Get(api.HeaderIdentity)
-	key, ok := keys[identity]
-	if !ok {
-		return "", errors.New("unknown identity")
+	if identity == "" {
+		return "", errors.New("missing identity")
 	}
 	ts := req.Header.Get(api.HeaderTimestamp)
 	nonce := req.Header.Get(api.HeaderNonce)
@@ -75,7 +80,7 @@ func Verify(req *http.Request, body []byte, keys map[string][]byte, nonces *Nonc
 		return "", errors.New("replayed nonce")
 	}
 	bodyHash := sha256.Sum256(body)
-	want := computeSig(key, req.Method, req.URL.RequestURI(), ts, nonce, bodyHash[:])
+	want := computeSig(hmacKey, req.Method, req.URL.RequestURI(), ts, nonce, bodyHash[:])
 	if !hmac.Equal([]byte(want), []byte(sig)) {
 		return "", errors.New("bad signature")
 	}
