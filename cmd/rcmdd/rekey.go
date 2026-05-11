@@ -60,7 +60,7 @@ Refuses to run without confirmation. Pass --yes to skip the prompt
 				return fmt.Errorf("save state: %w", err)
 			}
 
-			tok, err := token.Mint(token.Token{RelayURL: relayURL(s), MasterSecret: s.MasterSecret})
+			tok, err := token.Mint(token.Token{RelayURL: tokenURL(s), MasterSecret: s.MasterSecret})
 			if err != nil {
 				return fmt.Errorf("mint token: %w", err)
 			}

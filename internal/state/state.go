@@ -30,9 +30,10 @@ type RelayState struct {
 	InsecureAddr  string              `json:"insecure_addr,omitempty"`
 	ACMECacheDir  string              `json:"acme_cache_dir,omitempty"`
 	ACMEEmail     string              `json:"acme_email,omitempty"`
-	MasterSecret  string              `json:"master_secret"`         // base64 32-byte
-	Agents        map[string]Identity `json:"agents,omitempty"`      // self-declared agent IDs the relay has seen
-	Operators     map[string]Identity `json:"operators,omitempty"`   // self-declared operator IDs the relay has seen
+	MasterSecret  string              `json:"master_secret"`       // base64 32-byte
+	PublicURL     string              `json:"public_url,omitempty"` // URL embedded in join tokens; overrides domain/insecure_addr if set
+	Agents        map[string]Identity `json:"agents,omitempty"`    // self-declared agent IDs the relay has seen
+	Operators     map[string]Identity `json:"operators,omitempty"` // self-declared operator IDs the relay has seen
 }
 
 // Identity is the per-party observational record. Pure metadata: there

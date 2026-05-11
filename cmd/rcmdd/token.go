@@ -18,7 +18,7 @@ func newTokenCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tok, err := token.Mint(token.Token{RelayURL: relayURL(s), MasterSecret: s.MasterSecret})
+			tok, err := token.Mint(token.Token{RelayURL: tokenURL(s), MasterSecret: s.MasterSecret})
 			if err != nil {
 				return fmt.Errorf("mint token: %w", err)
 			}

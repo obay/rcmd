@@ -20,6 +20,7 @@ func newInitCmd() *cobra.Command {
 		listenAddr   string
 		insecure     bool
 		insecureAddr string
+		publicURL    string
 		force        bool
 	)
 	cmd := &cobra.Command{
@@ -60,6 +61,7 @@ Examples:
 
 			s := &state.RelayState{
 				MasterSecret: masterB64,
+				PublicURL:    publicURL,
 				Agents:       map[string]state.Identity{},
 				Operators:    map[string]state.Identity{},
 			}
@@ -78,7 +80,7 @@ Examples:
 				return fmt.Errorf("save state: %w", err)
 			}
 
-			joinURL := relayURL(s)
+			joinURL := tokenURL(s)
 			tok, err := token.Mint(token.Token{RelayURL: joinURL, MasterSecret: masterB64})
 			if err != nil {
 				return fmt.Errorf("mint token: %w", err)
@@ -112,17 +114,29 @@ Examples:
 	cmd.Flags().StringVar(&listenAddr, "listen-addr", ":443", "HTTPS listen address (autocert mode)")
 	cmd.Flags().BoolVar(&insecure, "insecure", false, "plain-HTTP mode (no TLS, no domain) — testing / trusted networks only")
 	cmd.Flags().StringVar(&insecureAddr, "insecure-addr", ":8080", "plain-HTTP listen address when --insecure is set")
+	cmd.Flags().StringVar(&publicURL, "public-url", "", "URL to embed in the join token (overrides the default; useful in --insecure mode where the listen address is not externally reachable)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing state file (destructive)")
 	return cmd
 }
 
-// relayURL builds the canonical join-URL for the relay based on its
-// TLS mode. For insecure mode the user is expected to substitute the
-// actual host themselves — we print http://<hostname>:port and they
-// can adjust.
-func relayURL(s *state.RelayState) string {
-	if s.TLSMode == "insecure" {
-		return "http://<this-host>" + s.InsecureAddr
+// tokenURL builds the URL to embed in the join token. Precedence:
+//
+//  1. state.PublicURL (explicit --public-url at init time)
+//  2. https://<domain> for autocert mode
+//  3. http://<insecure_addr> for insecure mode if the addr has a host
+//     component (e.g. "127.0.0.1:8080")
+//  4. http://<this-host><insecure_addr> placeholder otherwise, which
+//     the user must substitute manually
+func tokenURL(s *state.RelayState) string {
+	if s.PublicURL != "" {
+		return s.PublicURL
 	}
-	return "https://" + s.Domain
+	if s.TLSMode == "autocert" {
+		return "https://" + s.Domain
+	}
+	addr := s.InsecureAddr
+	if addr != "" && !strings.HasPrefix(addr, ":") {
+		return "http://" + addr
+	}
+	return "http://<this-host>" + addr
 }
