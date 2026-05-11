@@ -15,7 +15,9 @@ import (
 )
 
 func (s *server) transferRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/transfers", s.auth(s.recordOperator(s.createTransfer)))
+	// POST /v1/transfers can be called by either an operator (push) or
+	// an agent (pull). Identity goes in seen-list either way.
+	mux.HandleFunc("POST /v1/transfers", s.auth(s.recordParty(s.createTransfer)))
 	mux.HandleFunc("PUT /v1/transfers/{id}/chunks/{n}", s.auth(s.recordParty(s.putChunk)))
 	mux.HandleFunc("GET /v1/transfers/{id}/chunks/{n}", s.auth(s.recordParty(s.getChunk)))
 	mux.HandleFunc("GET /v1/transfers/{id}/status", s.auth(s.recordParty(s.transferStatus)))

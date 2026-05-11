@@ -21,12 +21,13 @@ import (
 const userAgent = "rcmd/0.1 (+https://github.com/obay/rcmd)"
 
 type client struct {
-	state      *state.OperatorState
-	relayURL   string
-	operatorID string
-	hmacKey    []byte
-	payloadKey []byte
-	http       *http.Client
+	state        *state.OperatorState
+	relayURL     string
+	operatorID   string
+	masterSecret []byte
+	hmacKey      []byte
+	payloadKey   []byte
+	http         *http.Client
 }
 
 func newClient() (*client, error) {
@@ -45,14 +46,23 @@ func newClient() (*client, error) {
 		return nil, errors.New("state: master_secret is missing or malformed")
 	}
 	return &client{
-		state:      s,
-		relayURL:   strings.TrimRight(s.RelayURL, "/"),
-		operatorID: s.OperatorID,
-		hmacKey:    crypto.DeriveHMACSubkey(master),
-		payloadKey: crypto.DeriveAEADSubkey(master),
+		state:        s,
+		relayURL:     strings.TrimRight(s.RelayURL, "/"),
+		operatorID:   s.OperatorID,
+		masterSecret: master,
+		hmacKey:      crypto.DeriveHMACSubkey(master),
+		payloadKey:   crypto.DeriveAEADSubkey(master),
 		// Long enough to cover poll+result phases; per-call timeouts via context.
 		http: &http.Client{Timeout: 0, Transport: defaultTransport()},
 	}, nil
+}
+
+// signer returns a transfer.Signer that attaches the operator's HMAC
+// headers to a request. Used by the chunked transfer client.
+func (c *client) signer() func(req *http.Request, body []byte) error {
+	return func(req *http.Request, body []byte) error {
+		return auth.Sign(req, c.operatorID, c.hmacKey, body)
+	}
 }
 
 func defaultTransport() http.RoundTripper {

@@ -75,11 +75,13 @@ type Result struct {
 	Stderr     string `json:"stderr,omitempty"`
 	DurationMs int64  `json:"duration_ms,omitempty"`
 	Truncated  bool   `json:"truncated,omitempty"`
-	// push
+	// push / fetch_transfer
 	BytesWritten int64 `json:"bytes_written,omitempty"`
-	// pull
+	// pull (legacy single-shot)
 	DataB64 string `json:"data_b64,omitempty"`
 	Size    int64  `json:"size,omitempty"`
+	// produce_transfer: agent created and uploaded a pull transfer.
+	TransferID string `json:"transfer_id,omitempty"`
 	// common
 	Ok    bool   `json:"ok,omitempty"`
 	Error string `json:"error,omitempty"`

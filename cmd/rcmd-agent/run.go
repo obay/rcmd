@@ -55,13 +55,14 @@ honors HTTPS_PROXY / HTTP_PROXY env vars.
 }
 
 type agent struct {
-	relayURL   string
-	agentID    string
-	hmacKey    []byte
-	payloadKey []byte
-	http       *http.Client
-	log        *log.Logger
-	defShell   string
+	relayURL     string
+	agentID      string
+	masterSecret []byte
+	hmacKey      []byte
+	payloadKey   []byte
+	http         *http.Client
+	log          *log.Logger
+	defShell     string
 }
 
 func newAgent() (*agent, error) {
@@ -84,13 +85,14 @@ func newAgent() (*agent, error) {
 		return nil, err
 	}
 	return &agent{
-		relayURL:   strings.TrimRight(s.RelayURL, "/"),
-		agentID:    s.AgentID,
-		hmacKey:    crypto.DeriveHMACSubkey(master),
-		payloadKey: crypto.DeriveAEADSubkey(master),
-		http:       &http.Client{Timeout: 0, Transport: http.DefaultTransport},
-		log:        logger,
-		defShell:   s.DefaultShell,
+		relayURL:     strings.TrimRight(s.RelayURL, "/"),
+		agentID:      s.AgentID,
+		masterSecret: master,
+		hmacKey:      crypto.DeriveHMACSubkey(master),
+		payloadKey:   crypto.DeriveAEADSubkey(master),
+		http:         &http.Client{Timeout: 0, Transport: http.DefaultTransport},
+		log:          logger,
+		defShell:     s.DefaultShell,
 	}, nil
 }
 
@@ -198,6 +200,10 @@ func (a *agent) execute(ctx context.Context, cmd api.Command) api.Result {
 		return doPush(cmd)
 	case api.KindPull:
 		return doPull(cmd)
+	case api.KindFetchTransfer:
+		return a.handleFetchTransfer(ctx, a.masterSecret, cmd)
+	case api.KindProduceTransfer:
+		return a.handleProduceTransfer(ctx, a.masterSecret, cmd)
 	default:
 		return api.Result{Ok: false, Error: "unknown command kind: " + cmd.Kind}
 	}
