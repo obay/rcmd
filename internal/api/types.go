@@ -11,9 +11,6 @@ const (
 	HeaderSig       = "X-Rcmd-Sig"
 	HeaderIdentity  = "X-Rcmd-Identity"
 
-	IdentityAgent    = "agent"
-	IdentityOperator = "operator"
-
 	KindExec = "exec"
 	KindPush = "push"
 	KindPull = "pull"

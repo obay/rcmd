@@ -20,18 +20,6 @@ import (
 
 const KeyBytes = 32 // AES-256
 
-// ParseKey decodes a base64-std key and verifies its length.
-func ParseKey(b64 string) ([]byte, error) {
-	k, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return nil, fmt.Errorf("decode key: %w", err)
-	}
-	if len(k) != KeyBytes {
-		return nil, fmt.Errorf("key must be %d bytes, got %d", KeyBytes, len(k))
-	}
-	return k, nil
-}
-
 // Seal marshals v as JSON, encrypts with the given key, and returns an
 // Envelope with base64 nonce and ciphertext.
 func Seal(key []byte, v any) (api.Envelope, error) {
@@ -89,11 +77,3 @@ func Open(key []byte, env api.Envelope, v any) error {
 	return nil
 }
 
-// NewKey returns a fresh 32-byte key, base64-encoded.
-func NewKey() (string, error) {
-	k := make([]byte, KeyBytes)
-	if _, err := rand.Read(k); err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(k), nil
-}

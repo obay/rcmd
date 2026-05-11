@@ -19,203 +19,188 @@ flowchart LR
     agent -- "POST result" --> relay
 ```
 
-Both sides only ever open **outbound** HTTPS connections. The relay needs inbound **:443**; Let's Encrypt uses TLS-ALPN-01 on the same port, so port 80 is not required.
+Operator and agent both make only **outbound** HTTPS connections. The relay listens on **:443** (no port 80 needed — Let's Encrypt is handled via TLS-ALPN-01 on the same port).
 
----
+## Components
+
+| Binary        | Runs on               | Role                                            |
+| ------------- | --------------------- | ----------------------------------------------- |
+| `rcmd`        | macOS, Linux, Windows | Operator CLI                                    |
+| `rcmdd`       | Linux                 | HTTPS relay (autocert via Let's Encrypt)        |
+| `rcmd-agent`  | Windows               | Long-polling agent (auto-installs as a service) |
 
 ## Installation
 
-Set up the three components in this order: **relay → agent → operator**. The relay must exist before the agent or operator can connect.
+| Role     | Command                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------- |
+| Relay    | `curl -fLO https://github.com/obay/rcmd/releases/latest/download/rcmdd_<ver>_linux_amd64.deb`<br/>`sudo dpkg -i rcmdd_<ver>_linux_amd64.deb` |
+| Agent    | `scoop bucket add obay https://github.com/obay/scoop-bucket`<br/>`scoop install obay/rcmd-agent` *(Windows, elevated)* |
+| Operator | `brew install obay/tap/rcmd` *(macOS, Linux)*<br/>`scoop install obay/rcmd` *(Windows)*                  |
 
-| Component       | Command                                                              |
-| --------------- | -------------------------------------------------------------------- |
-| Relay (Linux)   | `brew install obay/tap/rcmdd`                                       |
-| Agent (Windows) | `scoop bucket add obay https://github.com/obay/scoop-bucket`<br/>`scoop install obay/rcmd-agent` |
-| Operator        | `brew install obay/tap/rcmd`   *(macOS, Linux)*<br/>`scoop install obay/rcmd`   *(Windows)* |
+`.rpm`, `.tar.gz`, and `.zip` artifacts are on the [releases page](https://github.com/obay/rcmd/releases/latest).
 
-Direct `.deb` / `.rpm` / `.tar.gz` / `.zip` artifacts are also on the [latest release](https://github.com/obay/rcmd/releases/latest) page.
+## Bootstrap
 
----
+Set up in order — **relay → agent → operator**.
 
-## Usage
+### 1. Relay
 
-### Relay (`rcmdd`)
-
-#### 1. Generate keys
-
-Run once on the relay host. The three keys you generate here are used by all three components:
+Point a hostname (e.g. `rcmd.example.com`) at the host's public IP, then:
 
 ```sh
-$ rcmdd keygen --count 3
-TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU=
-VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38=
-NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30=
+sudo rcmdd init --domain rcmd.example.com
+sudo systemctl enable --now rcmdd
 ```
 
-Treat the first line as `agent_key`, the second as `operator_key`, the third as `payload_key`. Each key ends up in exactly two of the three configs:
+`init` generates a master secret, persists `/etc/rcmd/rcmdd.json` (owned by the service user `rcmd:rcmd`, mode `0640`), and prints a **join token** plus the exact `rcmd join` and `rcmd-agent join` commands to copy verbatim. Example:
 
-| Key            | Relay | Agent | Operator |
-| -------------- | :---: | :---: | :------: |
-| `agent_key`    |  ✅   |  ✅   |          |
-| `operator_key` |  ✅   |       |    ✅    |
-| `payload_key`  |       |  ✅   |    ✅    |
+```
+$ sudo rcmdd init --domain rcmd.example.com
+Wrote /etc/rcmd/rcmdd.json
 
-The relay never holds `payload_key`, which is why it can never see plaintext.
+Next steps:
 
-#### 2. Write `/etc/rcmd/rcmdd.toml`
+  1. Start the relay:
 
-```toml
-domain         = "relay.example.com"
-listen_addr    = ":443"
-acme_cache_dir = "/var/lib/rcmd/autocert"
-agent_key      = "TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU="
-operator_key   = "VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38="
-agent_ids      = ["win-host"]
+       sudo systemctl enable --now rcmdd
+
+  2. On each Windows agent (elevated PowerShell):
+
+       rcmd-agent join eyJ2IjoxLCJ1IjoiaHR0cHM6Ly9yY21kLmV4YW1wbGUuY29t...
+
+  3. On each operator machine:
+
+       rcmd join eyJ2IjoxLCJ1IjoiaHR0cHM6Ly9yY21kLmV4YW1wbGUuY29t...
+
+The string above is the join token. Anyone who has it can join
+the relay; treat it like a secret. Re-print at any time with:
+  sudo rcmdd token
 ```
 
-Replace `relay.example.com` with a hostname whose A/AAAA record points at this host. Let's Encrypt does not issue certificates for raw IP addresses — for IP-only setups see [Insecure mode](#insecure-mode-no-tls).
-
-#### 3. Start the service
+The first HTTPS request after `systemctl start` triggers Let's Encrypt cert provisioning (a few seconds). Confirm:
 
 ```sh
-sudo mkdir -p /var/lib/rcmd/autocert
-brew services start rcmdd
+curl -sI https://rcmd.example.com/healthz
+# HTTP/2 200
 ```
 
-#### 4. Verify
+#### Insecure mode (no TLS, no DNS)
+
+For trusted-network testing without a domain:
 
 ```sh
-$ curl -sI https://relay.example.com/healthz
-HTTP/2 200
+sudo rcmdd init --insecure --insecure-addr 127.0.0.1:8080 --public-url http://relay-host:8080
 ```
 
-The first request may take a few seconds while autocert obtains the Let's Encrypt cert.
+Command and result payloads are still AES-256-GCM-encrypted end-to-end; only the transport is unauthenticated.
 
-#### Insecure mode (no TLS)
+### 2. Agent (Windows)
 
-If you want to run on an IP or a private network without a domain, set `insecure = true` in `rcmdd.toml`. The relay then listens on plain HTTP at `insecure_addr` (default `:8080`). Command and result payloads are still AES-256-GCM end-to-end encrypted, but the transport itself is unauthenticated — only safe on a trusted network.
-
----
-
-### Agent (`rcmd-agent`)
-
-#### 1. Write `C:\ProgramData\rcmd\agent.toml`
-
-```toml
-relay_url     = "https://relay.example.com"
-agent_id      = "win-host"
-agent_key     = "TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU="   # key #1 from the relay
-payload_key   = "NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30="   # key #3 from the relay
-log_file      = "C:\\ProgramData\\rcmd\\agent.log"
-default_shell = "cmd"   # or "powershell"
-```
-
-#### 2. Install as a Windows service
+In an elevated PowerShell, paste the `rcmd-agent join …` line from the relay's output:
 
 ```pwsh
-PS> rcmd-agent install
-service rcmd-agent installed
-service started
+rcmd-agent join <token>
 ```
 
-#### 3. Verify
+`join` writes state, then registers and starts the SCM service `rcmd-agent`. The agent ID defaults to the lowercased hostname; override with `--as NAME`. To re-join after a relay rekey, add `--force`.
 
-Tail the agent log; you should see polling activity and no auth errors:
+Useful agent commands:
 
 ```pwsh
-Get-Content -Tail 5 -Wait C:\ProgramData\rcmd\agent.log
+rcmd-agent status              # state path, relay_url, agent_id
+rcmd-agent leave               # stop + uninstall service, remove state
+Get-Service rcmd-agent         # check SCM
+Get-Content -Tail 20 C:\ProgramData\rcmd\agent.log
 ```
 
-Other service controls: `rcmd-agent start`, `rcmd-agent stop`, `rcmd-agent uninstall`.
+### 3. Operator
 
----
-
-### Operator (`rcmd`)
-
-#### 1. Write the config
-
-Path:
-- `~/.config/rcmd/config.toml` on macOS / Linux
-- `%APPDATA%\rcmd\config.toml` on Windows
-
-```toml
-relay_url    = "https://relay.example.com"
-agent_id     = "win-host"
-operator_key = "VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38="    # key #2 from the relay
-payload_key  = "NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30="    # key #3 from the relay
-default_shell        = "cmd"
-default_timeout_secs = 60
+```sh
+rcmd join <token> --as alice
+rcmd list-agents               # see who's joined
+rcmd set-default-agent NAME    # pin one so --agent isn't needed
 ```
 
-#### 2. Verify the end-to-end path
+State is at `~/.config/rcmd/rcmd.json` on macOS/Linux or `%APPDATA%\rcmd\rcmd.json` on Windows.
+
+## Commands
+
+### `rcmd status`
+
+Round-trip probe: operator → relay → agent → relay → operator. Exits `0` if both legs are reachable.
 
 ```sh
 $ rcmd status
-relay  https://relay.example.com OK (42ms)
-agent  win-host OK (188ms)
+relay  https://rcmd.example.com OK (94ms)
+agent  win-host-1 OK (150ms)
 ```
 
-Both lines `OK` means operator → relay → agent → relay → operator works end-to-end. If the relay is OK but the agent is not, the agent isn't polling — check the agent log. If the relay itself is not OK, check DNS and that :443 is reachable.
+### `rcmd run`
 
-#### 3. Run commands on the agent
-
-##### `rcmd run`
-
-Executes a command on the agent. Stdout and stderr are returned as separate streams; the CLI exits with the agent-side exit code.
+Execute a command on the agent. Stdout and stderr are separate; CLI exits with the agent-side exit code.
 
 ```sh
-rcmd run [--shell cmd|powershell] [--timeout SECS] [--cwd DIR] [--json] -- COMMAND...
+rcmd run [--agent NAME] [--shell cmd|powershell] [--timeout SECS] [--cwd DIR] [--json] -- COMMAND...
 ```
 
 Examples:
 
 ```sh
-$ rcmd run "hostname"
-WIN-HOST
-
-$ rcmd run --shell powershell "Get-Process | Sort CPU -desc | Select -First 3"
-...
-
-$ rcmd run --timeout 300 -- msiexec /qn /i C:\install.msi
+rcmd run "hostname"
+rcmd run --agent win-host-2 "ipconfig /all"
+rcmd run --shell powershell "Get-Process | Sort CPU -desc | Select -First 5"
+rcmd run --timeout 300 -- msiexec /qn /i C:\install.msi
+rcmd run --json "hostname"
 ```
 
 Exit codes:
 
-| Code      | Meaning                                  |
-| --------- | ---------------------------------------- |
-| `0`–`255` | Agent-side process exit code             |
-| `124`     | Command timed out on the agent           |
+| Code      | Meaning                                   |
+| --------- | ----------------------------------------- |
+| `0`–`255` | Agent-side process exit code              |
+| `124`     | Command timed out on the agent            |
 | `1`       | Transport or config error (operator side) |
 
-##### `rcmd push` / `rcmd pull`
+### `rcmd push` / `rcmd pull`
 
-Upload a local file to the agent, or download one from it. End-to-end encrypted; the relay only sees ciphertext.
+Move a file. End-to-end encrypted; 16 MiB cap (v1).
 
 ```sh
-$ rcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
-$ rcmd pull C:\ProgramData\rcmd\agent.log ./agent.log
+rcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
+rcmd pull C:\ProgramData\rcmd\agent.log ./agent.log
+rcmd push --agent win-host-2 ./script.ps1 C:\Users\Public\script.ps1
 ```
 
-Hard cap: 16 MiB per file.
+### `--json`
 
-##### `--json` (every command)
+Every command accepts `--json` for scripting: one JSON object on stdout, agent-side status carried inside the JSON rather than the process exit code.
 
-All commands accept `--json` for scripting. Output becomes a single JSON object on stdout; transport / config errors still set exit code `1`, but agent-side status (`exit_code`, `truncated`, `duration_ms`, …) is carried in the JSON rather than the process exit code.
+## Day-2 operations (relay)
 
-##### Output limits
+| Command           | What                                                                              |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `rcmdd token`     | Re-print the current join token (no rotation).                                    |
+| `rcmdd list`      | Show seen operators + agents with first/last-seen timestamps.                     |
+| `rcmdd forget X`  | Remove `X` from the seen list (cosmetic).                                         |
+| `rcmdd rekey`     | Rotate the master secret. Invalidates **everyone** — all parties must re-join.    |
+| `rcmdd status`    | State health, TLS mode, listen address, ACME cache writable, seen counts.         |
+| `rcmdd version`   | Build info.                                                                       |
 
-Command output is capped at 8 MiB combined (4 MiB each for stdout and stderr). When the cap is hit, the result includes `truncated=true`.
+## Security model
 
----
-
-## Security
-
-- **Authenticity** — every request is HMAC-signed with `agent_key` or `operator_key`. Timestamp window plus a nonce cache prevent replay.
-- **Confidentiality** — command payloads and results are AES-256-GCM encrypted with `payload_key`. The relay never sees plaintext, so corporate TLS inspection between any party and the relay is harmless.
-- **Trust model** — the agent trusts the system CA store, so corporate MITM CAs work transparently. The AEAD layer above is what keeps that safe.
+- **One master secret per relay**, 32 random bytes. Generated by `rcmdd init`, embedded in the join token, copied verbatim into agent and operator state. From it, HKDF-SHA256 derives two subkeys: HMAC-SHA256 for request signing and AES-256-GCM for payload encryption.
+- **The relay holds the master secret.** That is the explicit security choice: you trust the relay you run. Compromise of the relay = compromise of the system. In exchange, bootstrap is one token, one paste, no key-matrix.
+- **Identities are self-declared and observational.** Anyone holding the master secret can claim any identity. The relay records who shows up under what name for `rcmdd list`. Per-party revocation requires `rcmdd rekey` (re-rolls everyone).
+- **Transport.** All signed traffic between operator/agent and relay goes over HTTPS on :443. HMAC + replay-prevention (timestamp window + nonce cache) on top. AES-GCM payload layer on top of that. Corporate TLS-inspection proxies are transparent to the AEAD layer.
 
 ## Limits (v1)
 
-- One agent per relay (the wire format is multi-agent; only single-agent is exercised).
-- No interactive shells / no PTY.
-- In-memory queue at the relay — a restart drops in-flight commands.
+- One agent is the exercised path; the wire format and queue support N agents.
+- 16 MiB per file (`push`/`pull`).
+- 8 MiB per command output (4 MiB each for stdout/stderr).
+- No interactive shells, no PTY.
+- Relay state is small JSON; the command queue is in-memory — restarting the relay drops in-flight commands but keeps the seen list.
+
+## License
+
+MIT.
