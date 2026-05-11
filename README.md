@@ -15,15 +15,29 @@
 
 Remote command execution that works through aggressive corporate firewalls. Designed for the case where SSH is blocked, TLS is inspected, and everything is deny-by-default — but outbound HTTPS to a domain you own still works (because almost nothing on the internet would work otherwise).
 
+```mermaid
+flowchart LR
+    subgraph mac["Mac (you)"]
+        cli["<b>obcmd</b><br/>(CLI)"]
+    end
+    subgraph vps["VPS (ai.obay.cloud)"]
+        relay["<b>obcmdd</b><br/>(relay)"]
+    end
+    subgraph dell["Dell (Windows)"]
+        agent["<b>obcmd-agent</b><br/>(service)"]
+    end
+
+    cli  -- "POST cmd"    --> relay
+    relay -- "GET result"  --> cli
+    agent -- "poll"        --> relay
+    relay -- "return cmd"  --> agent
+    agent -- "POST result" --> relay
+
+    classDef edge fill:#f6f8fa,stroke:#8b949e,stroke-width:1px,color:#24292f
+    class mac,vps,dell edge
 ```
-   Mac (you)                 VPS (ai.obay.cloud)             Dell (Windows)
-  ┌─────────┐                  ┌──────────┐                 ┌────────────┐
-  │ obcmd  │── POST cmd ────▶ │          │ ◀── poll ────── │ obcmd-    │
-  │  (CLI)  │ ◀── GET result ──│ obcmdd  │── return cmd ──▶│ agent      │
-  └─────────┘                  │  (relay) │ ◀── POST result │ (service)  │
-                               └──────────┘                 └────────────┘
-            both sides only ever make OUTBOUND HTTPS to :443
-```
+
+> Both sides only ever make **outbound HTTPS to :443**.
 
 ## How it works
 
