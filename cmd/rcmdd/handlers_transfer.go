@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -85,7 +86,10 @@ func (s *server) putChunk(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad chunk index", http.StatusBadRequest)
 		return
 	}
-	written, err := s.transfers.PutChunk(id, n, r.Body, transfer.MaxChunkBytes)
+	// The auth middleware has already drained r.Body into the context
+	// (to compute the HMAC body hash). Read from there.
+	body := bodyFrom(r.Context())
+	written, err := s.transfers.PutChunk(id, n, bytes.NewReader(body), transfer.MaxChunkBytes)
 	if err != nil {
 		if errors.Is(err, transfer.ErrNotFound) {
 			http.Error(w, "transfer not found", http.StatusNotFound)
