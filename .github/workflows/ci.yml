@@ -34,13 +34,13 @@ jobs:
         with:
           go-version: stable
           cache: true
-      - name: obcmdd (linux/amd64)
-        run: GOOS=linux  GOARCH=amd64 go build -o /tmp/obcmdd        ./cmd/obcmdd
-      - name: obcmdd (linux/arm64)
-        run: GOOS=linux  GOARCH=arm64 go build -o /tmp/obcmdd-arm    ./cmd/obcmdd
-      - name: obcmd-agent (windows/amd64) — the only shipped target
-        run: GOOS=windows GOARCH=amd64 go build -o /tmp/obcmd-agent.exe ./cmd/obcmd-agent
-      - name: obcmd (darwin/arm64)
-        run: GOOS=darwin GOARCH=arm64 go build -o /tmp/obcmd          ./cmd/obcmd
-      - name: obcmd (windows/amd64)
-        run: GOOS=windows GOARCH=amd64 go build -o /tmp/obcmd.exe     ./cmd/obcmd
+      - name: rcmdd (linux/amd64)
+        run: GOOS=linux  GOARCH=amd64 go build -o /tmp/rcmdd        ./cmd/rcmdd
+      - name: rcmdd (linux/arm64)
+        run: GOOS=linux  GOARCH=arm64 go build -o /tmp/rcmdd-arm    ./cmd/rcmdd
+      - name: rcmd-agent (windows/amd64) — the only shipped target
+        run: GOOS=windows GOARCH=amd64 go build -o /tmp/rcmd-agent.exe ./cmd/rcmd-agent
+      - name: rcmd (darwin/arm64)
+        run: GOOS=darwin GOARCH=arm64 go build -o /tmp/rcmd          ./cmd/rcmd
+      - name: rcmd (windows/amd64)
+        run: GOOS=windows GOARCH=amd64 go build -o /tmp/rcmd.exe     ./cmd/rcmd

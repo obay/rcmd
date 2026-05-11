@@ -32,7 +32,7 @@ jobs:
           version: latest
           args: release --clean
         env:
-          # Default token for creating the release in obay/obcmd itself.
+          # Default token for creating the release in obay/rcmd itself.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Cross-repo token (PAT with repo scope) for publishing to
           # obay/homebrew-tap and obay/scoop-bucket. Create this secret

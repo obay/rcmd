@@ -1,10 +1,10 @@
-// Package auth implements request signing for obcmd.
+// Package auth implements request signing for rcmd.
 //
 // Every authenticated request carries three headers:
 //
-//	X-Obcmd-Timestamp: <unix seconds>
-//	X-Obcmd-Nonce:     <hex 16 random bytes>
-//	X-Obcmd-Sig:       <hex HMAC-SHA256(key, METHOD\nPATH\nTS\nNONCE\nSHA256(body))>
+//	X-Rcmd-Timestamp: <unix seconds>
+//	X-Rcmd-Nonce:     <hex 16 random bytes>
+//	X-Rcmd-Sig:       <hex HMAC-SHA256(key, METHOD\nPATH\nTS\nNONCE\nSHA256(body))>
 //
 // The relay verifies the signature using the appropriate identity's
 // pre-shared key (agent_key or operator_key), checks the timestamp
@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obay/obcmd/internal/api"
+	"github.com/obay/rcmd/internal/api"
 )
 
 // Sign attaches the three auth headers to req. body is the exact bytes

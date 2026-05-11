@@ -1,16 +1,16 @@
-# obcmd
+# rcmd
 
-[![Release](https://img.shields.io/github/v/release/obay/obcmd?logo=github)](https://github.com/obay/obcmd/releases/latest)
-[![Build](https://img.shields.io/github/actions/workflow/status/obay/obcmd/release.yml?logo=githubactions&logoColor=white&label=release)](https://github.com/obay/obcmd/actions/workflows/release.yml)
-[![Go](https://img.shields.io/github/go-mod/go-version/obay/obcmd?logo=go&logoColor=white)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/obay/rcmd?logo=github)](https://github.com/obay/rcmd/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/obay/rcmd/release.yml?logo=githubactions&logoColor=white&label=release)](https://github.com/obay/rcmd/actions/workflows/release.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/obay/rcmd?logo=go&logoColor=white)](https://go.dev/)
 
 End-to-end encrypted remote command execution over outbound HTTPS — built for networks that block SSH and inspect TLS.
 
 ```mermaid
 flowchart LR
-    op["<b>obcmd</b><br/>operator"]
-    relay["<b>obcmdd</b><br/>relay · Linux"]
-    agent["<b>obcmd-agent</b><br/>agent · Windows"]
+    op["<b>rcmd</b><br/>operator"]
+    relay["<b>rcmdd</b><br/>relay · Linux"]
+    agent["<b>rcmd-agent</b><br/>agent · Windows"]
 
     op    -- "POST cmd"    --> relay
     relay -- "GET result"  --> op
@@ -29,24 +29,24 @@ Set up the three components in this order: **relay → agent → operator**. The
 
 | Component       | Command                                                              |
 | --------------- | -------------------------------------------------------------------- |
-| Relay (Linux)   | `brew install obay/tap/obcmdd`                                       |
-| Agent (Windows) | `scoop bucket add obay https://github.com/obay/scoop-bucket`<br/>`scoop install obay/obcmd-agent` |
-| Operator        | `brew install obay/tap/obcmd`   *(macOS, Linux)*<br/>`scoop install obay/obcmd`   *(Windows)* |
+| Relay (Linux)   | `brew install obay/tap/rcmdd`                                       |
+| Agent (Windows) | `scoop bucket add obay https://github.com/obay/scoop-bucket`<br/>`scoop install obay/rcmd-agent` |
+| Operator        | `brew install obay/tap/rcmd`   *(macOS, Linux)*<br/>`scoop install obay/rcmd`   *(Windows)* |
 
-Direct `.deb` / `.rpm` / `.tar.gz` / `.zip` artifacts are also on the [latest release](https://github.com/obay/obcmd/releases/latest) page.
+Direct `.deb` / `.rpm` / `.tar.gz` / `.zip` artifacts are also on the [latest release](https://github.com/obay/rcmd/releases/latest) page.
 
 ---
 
 ## Usage
 
-### Relay (`obcmdd`)
+### Relay (`rcmdd`)
 
 #### 1. Generate keys
 
 Run once on the relay host. The three keys you generate here are used by all three components:
 
 ```sh
-$ obcmdd keygen --count 3
+$ rcmdd keygen --count 3
 TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU=
 VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38=
 NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30=
@@ -62,12 +62,12 @@ Treat the first line as `agent_key`, the second as `operator_key`, the third as 
 
 The relay never holds `payload_key`, which is why it can never see plaintext.
 
-#### 2. Write `/etc/obcmd/obcmdd.toml`
+#### 2. Write `/etc/rcmd/rcmdd.toml`
 
 ```toml
 domain         = "relay.example.com"
 listen_addr    = ":443"
-acme_cache_dir = "/var/lib/obcmd/autocert"
+acme_cache_dir = "/var/lib/rcmd/autocert"
 agent_key      = "TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU="
 operator_key   = "VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38="
 agent_ids      = ["win-host"]
@@ -78,8 +78,8 @@ Replace `relay.example.com` with a hostname whose A/AAAA record points at this h
 #### 3. Start the service
 
 ```sh
-sudo mkdir -p /var/lib/obcmd/autocert
-brew services start obcmdd
+sudo mkdir -p /var/lib/rcmd/autocert
+brew services start rcmdd
 ```
 
 #### 4. Verify
@@ -93,28 +93,28 @@ The first request may take a few seconds while autocert obtains the Let's Encryp
 
 #### Insecure mode (no TLS)
 
-If you want to run on an IP or a private network without a domain, set `insecure = true` in `obcmdd.toml`. The relay then listens on plain HTTP at `insecure_addr` (default `:8080`). Command and result payloads are still AES-256-GCM end-to-end encrypted, but the transport itself is unauthenticated — only safe on a trusted network.
+If you want to run on an IP or a private network without a domain, set `insecure = true` in `rcmdd.toml`. The relay then listens on plain HTTP at `insecure_addr` (default `:8080`). Command and result payloads are still AES-256-GCM end-to-end encrypted, but the transport itself is unauthenticated — only safe on a trusted network.
 
 ---
 
-### Agent (`obcmd-agent`)
+### Agent (`rcmd-agent`)
 
-#### 1. Write `C:\ProgramData\obcmd\agent.toml`
+#### 1. Write `C:\ProgramData\rcmd\agent.toml`
 
 ```toml
 relay_url     = "https://relay.example.com"
 agent_id      = "win-host"
 agent_key     = "TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU="   # key #1 from the relay
 payload_key   = "NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30="   # key #3 from the relay
-log_file      = "C:\\ProgramData\\obcmd\\agent.log"
+log_file      = "C:\\ProgramData\\rcmd\\agent.log"
 default_shell = "cmd"   # or "powershell"
 ```
 
 #### 2. Install as a Windows service
 
 ```pwsh
-PS> obcmd-agent install
-service obcmd-agent installed
+PS> rcmd-agent install
+service rcmd-agent installed
 service started
 ```
 
@@ -123,20 +123,20 @@ service started
 Tail the agent log; you should see polling activity and no auth errors:
 
 ```pwsh
-Get-Content -Tail 5 -Wait C:\ProgramData\obcmd\agent.log
+Get-Content -Tail 5 -Wait C:\ProgramData\rcmd\agent.log
 ```
 
-Other service controls: `obcmd-agent start`, `obcmd-agent stop`, `obcmd-agent uninstall`.
+Other service controls: `rcmd-agent start`, `rcmd-agent stop`, `rcmd-agent uninstall`.
 
 ---
 
-### Operator (`obcmd`)
+### Operator (`rcmd`)
 
 #### 1. Write the config
 
 Path:
-- `~/.config/obcmd/config.toml` on macOS / Linux
-- `%APPDATA%\obcmd\config.toml` on Windows
+- `~/.config/rcmd/config.toml` on macOS / Linux
+- `%APPDATA%\rcmd\config.toml` on Windows
 
 ```toml
 relay_url    = "https://relay.example.com"
@@ -150,7 +150,7 @@ default_timeout_secs = 60
 #### 2. Verify the end-to-end path
 
 ```sh
-$ obcmd status
+$ rcmd status
 relay  https://relay.example.com OK (42ms)
 agent  win-host OK (188ms)
 ```
@@ -159,24 +159,24 @@ Both lines `OK` means operator → relay → agent → relay → operator works 
 
 #### 3. Run commands on the agent
 
-##### `obcmd run`
+##### `rcmd run`
 
 Executes a command on the agent. Stdout and stderr are returned as separate streams; the CLI exits with the agent-side exit code.
 
 ```sh
-obcmd run [--shell cmd|powershell] [--timeout SECS] [--cwd DIR] [--json] -- COMMAND...
+rcmd run [--shell cmd|powershell] [--timeout SECS] [--cwd DIR] [--json] -- COMMAND...
 ```
 
 Examples:
 
 ```sh
-$ obcmd run "hostname"
+$ rcmd run "hostname"
 WIN-HOST
 
-$ obcmd run --shell powershell "Get-Process | Sort CPU -desc | Select -First 3"
+$ rcmd run --shell powershell "Get-Process | Sort CPU -desc | Select -First 3"
 ...
 
-$ obcmd run --timeout 300 -- msiexec /qn /i C:\install.msi
+$ rcmd run --timeout 300 -- msiexec /qn /i C:\install.msi
 ```
 
 Exit codes:
@@ -187,13 +187,13 @@ Exit codes:
 | `124`     | Command timed out on the agent           |
 | `1`       | Transport or config error (operator side) |
 
-##### `obcmd push` / `obcmd pull`
+##### `rcmd push` / `rcmd pull`
 
 Upload a local file to the agent, or download one from it. End-to-end encrypted; the relay only sees ciphertext.
 
 ```sh
-$ obcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
-$ obcmd pull C:\ProgramData\obcmd\agent.log ./agent.log
+$ rcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
+$ rcmd pull C:\ProgramData\rcmd\agent.log ./agent.log
 ```
 
 Hard cap: 16 MiB per file.

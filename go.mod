@@ -1,4 +1,4 @@
-module github.com/obay/obcmd
+module github.com/obay/rcmd
 
 go 1.26.2
 

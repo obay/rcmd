@@ -1,7 +1,7 @@
-# install-agent.ps1 — install the obcmd-agent Windows service.
+# install-agent.ps1 — install the rcmd-agent Windows service.
 #
-# Run this from an elevated PowerShell prompt. It expects obcmd-agent.exe
-# to be on PATH (e.g. installed via `scoop install obay/obcmd-agent`) or
+# Run this from an elevated PowerShell prompt. It expects rcmd-agent.exe
+# to be on PATH (e.g. installed via `scoop install obay/rcmd-agent`) or
 # present in the current directory.
 #
 # Usage:
@@ -16,13 +16,13 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Resolve the binary.
-$bin = Get-Command obcmd-agent.exe -ErrorAction SilentlyContinue
+$bin = Get-Command rcmd-agent.exe -ErrorAction SilentlyContinue
 if ($null -eq $bin) {
-    $local = Join-Path $PSScriptRoot 'obcmd-agent.exe'
+    $local = Join-Path $PSScriptRoot 'rcmd-agent.exe'
     if (Test-Path $local) {
         $binPath = $local
     } else {
-        throw "obcmd-agent.exe not found on PATH or in $PSScriptRoot. Install via 'scoop install obay/obcmd-agent' first."
+        throw "rcmd-agent.exe not found on PATH or in $PSScriptRoot. Install via 'scoop install obay/rcmd-agent' first."
     }
 } else {
     $binPath = $bin.Source
@@ -33,8 +33,8 @@ if ($Uninstall) {
     exit $LASTEXITCODE
 }
 
-# Make sure %PROGRAMDATA%\obcmd exists and has a config.
-$dataDir = Join-Path $env:PROGRAMDATA 'obcmd'
+# Make sure %PROGRAMDATA%\rcmd exists and has a config.
+$dataDir = Join-Path $env:PROGRAMDATA 'rcmd'
 $cfgPath = Join-Path $dataDir 'agent.toml'
 if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
@@ -42,12 +42,12 @@ if (-not (Test-Path $dataDir)) {
 if (-not (Test-Path $cfgPath)) {
     Write-Host "No config at $cfgPath. Creating template — edit it before the agent will work."
     @'
-# obcmd-agent config
+# rcmd-agent config
 relay_url   = "https://relay.example.com"
 agent_id    = "win-host"
 agent_key   = ""   # base64 32B — same as relay's agent_key
 payload_key = ""   # base64 32B — same as operator's payload_key
-log_file    = "C:\\ProgramData\\obcmd\\agent.log"
+log_file    = "C:\\ProgramData\\rcmd\\agent.log"
 default_shell = "cmd"
 '@ | Set-Content -Path $cfgPath -Encoding UTF8
     Write-Host "Template config written to $cfgPath"

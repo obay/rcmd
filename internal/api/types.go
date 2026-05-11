@@ -1,4 +1,4 @@
-// Package api defines the wire format for obcmd — header names, kinds,
+// Package api defines the wire format for rcmd — header names, kinds,
 // and the JSON-serializable structs that flow through the relay.
 //
 // Everything in this package is intentionally simple: it's the boundary
@@ -6,10 +6,10 @@
 package api
 
 const (
-	HeaderTimestamp = "X-Obcmd-Timestamp"
-	HeaderNonce     = "X-Obcmd-Nonce"
-	HeaderSig       = "X-Obcmd-Sig"
-	HeaderIdentity  = "X-Obcmd-Identity"
+	HeaderTimestamp = "X-Rcmd-Timestamp"
+	HeaderNonce     = "X-Rcmd-Nonce"
+	HeaderSig       = "X-Rcmd-Sig"
+	HeaderIdentity  = "X-Rcmd-Identity"
 
 	IdentityAgent    = "agent"
 	IdentityOperator = "operator"

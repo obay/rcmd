@@ -1,13 +1,13 @@
 # Built binaries (cmd/<name> compiled to ./<name> by `go build`)
-/obcmd
-/obcmdd
-/obcmd-agent
-/obcmd.exe
-/obcmdd.exe
-/obcmd-agent.exe
+/rcmd
+/rcmdd
+/rcmd-agent
+/rcmd.exe
+/rcmdd.exe
+/rcmd-agent.exe
 
 # Local configs (real keys never go in git)
-/obcmdd.toml
+/rcmdd.toml
 /agent.toml
 /config.toml
 *.local.toml

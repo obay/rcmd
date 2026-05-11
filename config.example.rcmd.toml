@@ -1,0 +1,16 @@
+# rcmd — operator CLI config
+# Path: ~/.config/rcmd/config.toml  (macOS / Linux)
+#       %APPDATA%\rcmd\config.toml  (Windows — point with --config if needed)
+
+relay_url = "https://relay.example.com"
+agent_id  = "win-host"
+
+# Pre-shared keys (base64, 32 bytes each).
+# operator_key — shared with the relay (NOT with the agent).
+# payload_key  — shared with the agent (NOT with the relay).
+# Generate fresh keys with:  rcmd keygen --count 2
+operator_key = ""
+payload_key  = ""
+
+default_shell        = "cmd"     # cmd | powershell
+default_timeout_secs = 60

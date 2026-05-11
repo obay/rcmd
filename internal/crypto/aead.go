@@ -1,4 +1,4 @@
-// Package crypto wraps AES-256-GCM for obcmd payloads.
+// Package crypto wraps AES-256-GCM for rcmd payloads.
 //
 // All command/result bodies are sealed with a pre-shared 32-byte key
 // before being placed in the HTTPS body. The relay never has this key,
@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/obay/obcmd/internal/api"
+	"github.com/obay/rcmd/internal/api"
 )
 
 const KeyBytes = 32 // AES-256

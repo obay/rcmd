@@ -1,6 +1,6 @@
-# GoReleaser config for obcmd.
+# GoReleaser config for rcmd.
 #
-# Builds three binaries (obcmdd, obcmd, obcmd-agent) for the
+# Builds three binaries (rcmdd, rcmd, rcmd-agent) for the
 # platforms each one actually runs on, ships archives + deb/rpm to
 # GitHub Releases, and publishes Homebrew + Scoop manifests to your
 # personal taps at github.com/obay.
@@ -10,17 +10,17 @@
 
 version: 2
 
-project_name: obcmd
+project_name: rcmd
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  # obcmdd — the relay. Linux only.
-  - id: obcmdd
-    main: ./cmd/obcmdd
-    binary: obcmdd
+  # rcmdd — the relay. Linux only.
+  - id: rcmdd
+    main: ./cmd/rcmdd
+    binary: rcmdd
     env:
       - CGO_ENABLED=0
     goos: [linux]
@@ -28,10 +28,10 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 
-  # obcmd — the operator CLI. Runs anywhere a human types.
-  - id: obcmd
-    main: ./cmd/obcmd
-    binary: obcmd
+  # rcmd — the operator CLI. Runs anywhere a human types.
+  - id: rcmd
+    main: ./cmd/rcmd
+    binary: rcmd
     env:
       - CGO_ENABLED=0
     goos: [darwin, linux, windows]
@@ -39,12 +39,12 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 
-  # obcmd-agent — the remote-exec agent. Ships ONLY for Windows amd64.
+  # rcmd-agent — the remote-exec agent. Ships ONLY for Windows amd64.
   # The source still cross-compiles to darwin/linux via build tags for
   # local development, but we don't release those artifacts.
-  - id: obcmd-agent
-    main: ./cmd/obcmd-agent
-    binary: obcmd-agent
+  - id: rcmd-agent
+    main: ./cmd/rcmd-agent
+    binary: rcmd-agent
     env:
       - CGO_ENABLED=0
     goos: [windows]
@@ -53,9 +53,9 @@ builds:
       - -s -w -X main.version={{.Version}}
 
 archives:
-  - id: obcmd-cli
-    ids: [obcmd]
-    name_template: "obcmd_{{.Version}}_{{.Os}}_{{.Arch}}"
+  - id: rcmd-cli
+    ids: [rcmd]
+    name_template: "rcmd_{{.Version}}_{{.Os}}_{{.Arch}}"
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -63,11 +63,11 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - config.example.obcmd.toml
+      - config.example.rcmd.toml
 
-  - id: obcmd-agent
-    ids: [obcmd-agent]
-    name_template: "obcmd-agent_{{.Version}}_{{.Os}}_{{.Arch}}"
+  - id: rcmd-agent
+    ids: [rcmd-agent]
+    name_template: "rcmd-agent_{{.Version}}_{{.Os}}_{{.Arch}}"
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -75,35 +75,35 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - config.example.obcmd-agent.toml
+      - config.example.rcmd-agent.toml
       - deploy/install-agent.ps1
 
-  - id: obcmdd
-    ids: [obcmdd]
-    name_template: "obcmdd_{{.Version}}_{{.Os}}_{{.Arch}}"
+  - id: rcmdd
+    ids: [rcmdd]
+    name_template: "rcmdd_{{.Version}}_{{.Os}}_{{.Arch}}"
     formats: [tar.gz]
     files:
       - README.md
       - LICENSE*
-      - config.example.obcmdd.toml
-      - deploy/obcmdd.service
+      - config.example.rcmdd.toml
+      - deploy/rcmdd.service
 
 nfpms:
-  - id: obcmdd-deb
-    package_name: obcmdd
-    builds: [obcmdd]
+  - id: rcmdd-deb
+    package_name: rcmdd
+    builds: [rcmdd]
     vendor: obay
-    homepage: https://github.com/obay/obcmd
+    homepage: https://github.com/obay/rcmd
     maintainer: obay <ahmad.obay@gmail.com>
-    description: obcmd relay server
+    description: rcmd relay server
     license: MIT
     formats: [deb, rpm]
     bindir: /usr/local/bin
     contents:
-      - src: deploy/obcmdd.service
-        dst: /lib/systemd/system/obcmdd.service
-      - src: config.example.obcmdd.toml
-        dst: /etc/obcmd/obcmdd.toml.example
+      - src: deploy/rcmdd.service
+        dst: /lib/systemd/system/rcmdd.service
+      - src: config.example.rcmdd.toml
+        dst: /etc/rcmd/rcmdd.toml.example
         type: config
 
 checksum:
@@ -122,78 +122,78 @@ changelog:
 
 # Homebrew tap at github.com/obay/homebrew-tap.
 brews:
-  - name: obcmd
-    ids: [obcmd-cli]
+  - name: rcmd
+    ids: [rcmd-cli]
     repository:
       owner: obay
       name: homebrew-tap
       branch: main
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/obay/obcmd
-    description: Operator CLI for the obcmd remote-exec relay
+    homepage: https://github.com/obay/rcmd
+    description: Operator CLI for the rcmd remote-exec relay
     license: MIT
     install: |
-      bin.install "obcmd"
+      bin.install "rcmd"
     test: |
-      system "#{bin}/obcmd", "version"
+      system "#{bin}/rcmd", "version"
 
-  - name: obcmdd
-    ids: [obcmdd]
+  - name: rcmdd
+    ids: [rcmdd]
     repository:
       owner: obay
       name: homebrew-tap
       branch: main
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/obay/obcmd
-    description: HTTPS relay for the obcmd remote-exec system (Linux only)
+    homepage: https://github.com/obay/rcmd
+    description: HTTPS relay for the rcmd remote-exec system (Linux only)
     license: MIT
     install: |
-      bin.install "obcmdd"
-      (etc/"obcmd").mkpath
-      pkgshare.install "config.example.obcmdd.toml"
-      pkgshare.install "deploy/obcmdd.service" if File.exist?("deploy/obcmdd.service")
+      bin.install "rcmdd"
+      (etc/"rcmd").mkpath
+      pkgshare.install "config.example.rcmdd.toml"
+      pkgshare.install "deploy/rcmdd.service" if File.exist?("deploy/rcmdd.service")
     caveats: |
-      Config example: #{HOMEBREW_PREFIX}/share/obcmdd/config.example.obcmdd.toml
-      Copy to #{HOMEBREW_PREFIX}/etc/obcmd/obcmdd.toml and edit before starting.
+      Config example: #{HOMEBREW_PREFIX}/share/rcmdd/config.example.rcmdd.toml
+      Copy to #{HOMEBREW_PREFIX}/etc/rcmd/rcmdd.toml and edit before starting.
     service: |
-      run [opt_bin/"obcmdd", "serve", "--config", etc/"obcmd/obcmdd.toml"]
+      run [opt_bin/"rcmdd", "serve", "--config", etc/"rcmd/rcmdd.toml"]
       keep_alive true
-      log_path var/"log/obcmdd.log"
-      error_log_path var/"log/obcmdd.err.log"
+      log_path var/"log/rcmdd.log"
+      error_log_path var/"log/rcmdd.err.log"
     test: |
-      system "#{bin}/obcmdd", "version"
+      system "#{bin}/rcmdd", "version"
 
-# obcmd-agent is Windows-only; no Homebrew formula.
+# rcmd-agent is Windows-only; no Homebrew formula.
 
 # Scoop bucket at github.com/obay/scoop-bucket. Windows users install
 # the agent with: scoop bucket add obay https://github.com/obay/scoop-bucket
-# then `scoop install obay/obcmd-agent`.
+# then `scoop install obay/rcmd-agent`.
 scoops:
-  - name: obcmd-agent
-    ids: [obcmd-agent]
+  - name: rcmd-agent
+    ids: [rcmd-agent]
     repository:
       owner: obay
       name: scoop-bucket
       branch: main
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/obay/obcmd
-    description: obcmd remote-execution agent (Windows service)
+    homepage: https://github.com/obay/rcmd
+    description: rcmd remote-execution agent (Windows service)
     license: MIT
 
-  - name: obcmd
-    ids: [obcmd-cli]
+  - name: rcmd
+    ids: [rcmd-cli]
     repository:
       owner: obay
       name: scoop-bucket
       branch: main
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/obay/obcmd
-    description: obcmd operator CLI
+    homepage: https://github.com/obay/rcmd
+    description: rcmd operator CLI
     license: MIT
 
 release:
   github:
     owner: obay
-    name: obcmd
+    name: rcmd
   draft: false
   prerelease: auto

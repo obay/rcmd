@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obay/obcmd/internal/api"
+	"github.com/obay/rcmd/internal/api"
 )
 
 const (
