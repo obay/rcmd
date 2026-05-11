@@ -114,9 +114,12 @@ changelog:
       - "^ci:"
 
 # Homebrew tap at github.com/obay/homebrew-tap.
+# directory: Formula is required because the tap has a Formula/ subdir;
+# when present, brew only looks there and ignores repo-root .rb files.
 brews:
   - name: rcmd
     ids: [rcmd-cli]
+    directory: Formula
     repository:
       owner: obay
       name: homebrew-tap
@@ -132,6 +135,7 @@ brews:
 
   - name: rcmdd
     ids: [rcmdd]
+    directory: Formula
     repository:
       owner: obay
       name: homebrew-tap
