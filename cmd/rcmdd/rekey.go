@@ -59,6 +59,7 @@ Refuses to run without confirmation. Pass --yes to skip the prompt
 			if err := state.SaveRelay(statePath, s); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
+			handoffStateToService(statePath)
 
 			tok, err := token.Mint(token.Token{RelayURL: tokenURL(s), MasterSecret: s.MasterSecret})
 			if err != nil {

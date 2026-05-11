@@ -39,6 +39,7 @@ access, use 'rcmdd rekey'.`,
 			if err := state.SaveRelay(statePath, s); err != nil {
 				return err
 			}
+			handoffStateToService(statePath)
 			fmt.Printf("Removed %q from seen list.\n", name)
 			return nil
 		},

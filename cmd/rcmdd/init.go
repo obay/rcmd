@@ -79,6 +79,12 @@ Examples:
 			if err := state.SaveRelay(statePath, s); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
+			// When init is run as root (typical: `sudo rcmdd init` after
+			// installing the .deb), the state file is created with root
+			// ownership and mode 0600. The systemd unit runs as user
+			// `rcmd`, which would then fail to read it. Hand off
+			// ownership now if that user exists.
+			handoffStateToService(statePath)
 
 			joinURL := tokenURL(s)
 			tok, err := token.Mint(token.Token{RelayURL: joinURL, MasterSecret: masterB64})
