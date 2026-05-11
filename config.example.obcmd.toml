@@ -2,7 +2,7 @@
 # Path: ~/.config/obcmd/config.toml  (macOS / Linux)
 #       %APPDATA%\obcmd\config.toml  (Windows — point with --config if needed)
 
-relay_url = "https://ai.obay.cloud"
+relay_url = "https://relay.example.com"
 agent_id  = "win-host"
 
 # Pre-shared keys (base64, 32 bytes each).

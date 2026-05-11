@@ -3,7 +3,7 @@
 #       /etc/obcmd/agent.toml                   (Linux)
 #       /usr/local/etc/obcmd/agent.toml         (macOS)
 
-relay_url = "https://ai.obay.cloud"
+relay_url = "https://relay.example.com"
 agent_id  = "win-host"
 
 # Pre-shared keys (base64, 32 bytes each).

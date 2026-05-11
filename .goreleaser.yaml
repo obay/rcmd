@@ -17,13 +17,13 @@ before:
     - go mod tidy
 
 builds:
-  # obcmdd — the relay. Runs on the VPS only.
+  # obcmdd — the relay. Linux only.
   - id: obcmdd
     main: ./cmd/obcmdd
     binary: obcmdd
     env:
       - CGO_ENABLED=0
-    goos: [linux, darwin]
+    goos: [linux]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X main.version={{.Version}}
@@ -145,7 +145,7 @@ brews:
       branch: main
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/obay/obcmd
-    description: HTTPS relay for the obcmd remote-exec system
+    description: HTTPS relay for the obcmd remote-exec system (Linux only)
     license: MIT
     install: |
       bin.install "obcmdd"

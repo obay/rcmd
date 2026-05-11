@@ -39,7 +39,7 @@ Quick start:
   obcmd pull C:\Windows\System32\drivers\etc\hosts hosts.remote
 
 Config (key = value):
-  relay_url            = "https://ai.obay.cloud"
+  relay_url            = "https://relay.example.com"
   agent_id             = "win-host"
   operator_key         = "<base64 32B>"
   payload_key          = "<base64 32B>"

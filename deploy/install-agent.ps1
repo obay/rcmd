@@ -43,7 +43,7 @@ if (-not (Test-Path $cfgPath)) {
     Write-Host "No config at $cfgPath. Creating template — edit it before the agent will work."
     @'
 # obcmd-agent config
-relay_url   = "https://ai.obay.cloud"
+relay_url   = "https://relay.example.com"
 agent_id    = "win-host"
 agent_key   = ""   # base64 32B — same as relay's agent_key
 payload_key = ""   # base64 32B — same as operator's payload_key

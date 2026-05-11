@@ -33,7 +33,7 @@ the configured domain, with a :80 listener for HTTP-01 challenges.
 Use --insecure for plain HTTP on a custom port (testing only).
 
 Required config keys:
-  domain         — fully qualified hostname (e.g. ai.obay.cloud)
+  domain         — fully qualified hostname (e.g. relay.example.com)
   agent_key      — base64 32-byte HMAC key for agents
   operator_key   — base64 32-byte HMAC key for operators
 

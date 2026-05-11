@@ -20,9 +20,9 @@ func newRootCmd() *cobra.Command {
 		Use:   "obcmdd",
 		Short: "obcmd relay server",
 		Long: strings.TrimSpace(`
-obcmdd is the obcmd relay server. It runs on a VPS at a domain you
-own and brokers encrypted commands between the obcmd operator CLI and
-the obcmd-agent (Windows).
+obcmdd is the obcmd relay server. It runs on a Linux host at a domain
+you own and brokers encrypted commands between the obcmd operator CLI
+and the obcmd-agent (Windows).
 
 The relay only ever sees encrypted envelopes — command text, file
 contents, and output never appear in cleartext on the relay. All

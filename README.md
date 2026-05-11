@@ -13,17 +13,17 @@
 [![Crypto](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20HMAC-critical?logo=keycdn&logoColor=white)](#how-it-works)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/obay/obcmd/pulls)
 
-Remote command execution that works through aggressive corporate firewalls. Designed for the case where SSH is blocked, TLS is inspected, and everything is deny-by-default — but outbound HTTPS to a domain you own still works (because almost nothing on the internet would work otherwise).
+Remote command execution over outbound HTTPS. End-to-end encrypted, HMAC-authenticated, and indistinguishable on the wire from ordinary web traffic — suitable for networks where SSH is blocked and TLS is inspected.
 
 ```mermaid
 flowchart LR
-    subgraph mac["Mac (you)"]
+    subgraph op["Operator"]
         cli["<b>obcmd</b><br/>(CLI)"]
     end
-    subgraph vps["VPS (ai.obay.cloud)"]
+    subgraph host["Relay host"]
         relay["<b>obcmdd</b><br/>(relay)"]
     end
-    subgraph win["Windows host"]
+    subgraph win["Windows agent"]
         agent["<b>obcmd-agent</b><br/>(service)"]
     end
 
@@ -34,7 +34,7 @@ flowchart LR
     agent -- "POST result" --> relay
 
     classDef edge fill:#f6f8fa,stroke:#8b949e,stroke-width:1px,color:#24292f
-    class mac,vps,win edge
+    class op,host,win edge
 ```
 
 > Both sides only ever make **outbound HTTPS to :443**.
@@ -45,7 +45,7 @@ Three Go binaries:
 
 | Binary         | Where it runs         | What it does                                         |
 | -------------- | --------------------- | ---------------------------------------------------- |
-| `obcmdd`      | Your VPS (linux)      | HTTPS relay (Let's Encrypt). Stores only ciphertext. |
+| `obcmdd`      | Linux host            | HTTPS relay (Let's Encrypt). Stores only ciphertext. |
 | `obcmd-agent` | Windows host          | Long-polls the relay; executes; posts results.       |
 | `obcmd`       | Operator workstation  | Operator CLI: `run`, `push`, `pull`, `status`.       |
 
@@ -58,11 +58,13 @@ Security:
 
 ## Install
 
-### Mac (operator CLI)
+### Operator (macOS / Linux)
 
 ```sh
 brew install obay/tap/obcmd
 ```
+
+On Windows, use Scoop (`scoop install obay/obcmd`).
 
 ### Windows (agent)
 
@@ -73,9 +75,9 @@ scoop install obay/obcmd-agent
 
 The agent is released for Windows amd64 only.
 
-### VPS / Linux (relay)
+### Relay (Linux)
 
-Via Homebrew (works on macOS and Linuxbrew):
+Via Linuxbrew:
 
 ```sh
 brew install obay/tap/obcmdd
@@ -93,7 +95,7 @@ sudo cp deploy/obcmdd.service /etc/systemd/system/
 
 Generate keys once on any machine — `obcmd keygen --count 3` prints three 32-byte base64 keys. Use them as:
 
-| Key            | VPS (`obcmdd.toml`) | Agent (`agent.toml`) | Operator (`config.toml`) |
+| Key            | Relay (`obcmdd.toml`) | Agent (`agent.toml`) | Operator (`config.toml`) |
 | -------------- | :------------------: | :-----------------: | :-----------------: |
 | `agent_key`    | ✅                    | ✅                   |                     |
 | `operator_key` | ✅                    |                     | ✅                   |
@@ -101,7 +103,7 @@ Generate keys once on any machine — `obcmd keygen --count 3` prints three 32-b
 
 Each example config in this repo (`config.example.*.toml`) shows exactly what goes where.
 
-### VPS
+### Relay
 
 ```sh
 sudo useradd -r -s /usr/sbin/nologin obcmd
@@ -112,7 +114,7 @@ sudo chown -R obcmd:obcmd /var/lib/obcmd
 sudo systemctl enable --now obcmdd
 ```
 
-DNS: point your domain (e.g. `ai.obay.cloud`) at the VPS. Open inbound :80 and :443.
+DNS: point your domain at the relay host. Open inbound :80 and :443.
 
 ### Windows (agent)
 
@@ -167,7 +169,7 @@ git push --tags
 ```
 
 The `.github/workflows/release.yml` workflow runs GoReleaser:
-- Builds `obcmdd` (linux + macOS, amd64 + arm64), `obcmd` (all three OSes, amd64 + arm64), and `obcmd-agent` (windows/amd64 only).
+- Builds `obcmdd` (linux, amd64 + arm64), `obcmd` (macOS + linux + windows, amd64 + arm64), and `obcmd-agent` (windows/amd64 only).
 - Publishes a GitHub Release with archives, deb, rpm, and checksums.
 - Updates the Homebrew tap at `obay/homebrew-tap` (obcmd CLI).
 - Updates the Scoop bucket at `obay/scoop-bucket` (obcmd-agent + obcmd CLI).

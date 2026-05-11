@@ -2,7 +2,7 @@
 # Path: /etc/obcmd/obcmdd.toml
 
 # Domain you control. Required unless insecure=true.
-domain = "ai.obay.cloud"
+domain = "relay.example.com"
 
 # HTTPS listener (Let's Encrypt via autocert).
 listen_addr = ":443"

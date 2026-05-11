@@ -67,7 +67,7 @@ Windows service install:
   obcmd-agent uninstall            # stops and removes the service
 
 Config (key = value):
-  relay_url      = "https://ai.obay.cloud"
+  relay_url      = "https://relay.example.com"
   agent_id       = "win-host"
   agent_key      = "<base64 32B>"   # shared with relay
   payload_key    = "<base64 32B>"   # shared with operator

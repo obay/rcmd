@@ -32,7 +32,7 @@ DESCRIPTION
 EXAMPLES
   obcmd status
   obcmd status --json
-  # -> {"kind":"status","relay_url":"https://ai.obay.cloud",
+  # -> {"kind":"status","relay_url":"https://relay.example.com",
   #     "relay_ok":true,"relay_latency_ms":42,
   #     "agent_id":"win-host","agent_ok":true,"agent_latency_ms":188}
 
