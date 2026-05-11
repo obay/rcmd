@@ -33,3 +33,13 @@ func stub(name, short string) *cobra.Command {
 		},
 	}
 }
+
+// installService / uninstallService stubs for non-Windows builds so
+// join.go and leave.go can call them unconditionally.
+func installService(binPath string) error {
+	return errors.New("service install is Windows-only; on this platform use 'rcmd-agent run' for foreground operation")
+}
+
+func uninstallService() error {
+	return errors.New("service uninstall is Windows-only")
+}

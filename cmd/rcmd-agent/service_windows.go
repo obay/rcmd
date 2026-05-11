@@ -24,18 +24,14 @@ func newServiceCmd() *cobra.Command {
 		Short: "Run as a Windows service (invoked by SCM, not by humans)",
 		Long: strings.TrimSpace(`
 service is the entrypoint invoked by the Windows Service Control
-Manager. The 'install' subcommand registers the service with this
-binary's full path plus the 'service' argument, so SCM runs:
+Manager. 'rcmd-agent join' registers the service with this binary's
+full path plus the 'service' argument, so SCM runs:
 
   rcmd-agent.exe service
 
-You generally do not run this yourself — use 'run' for foreground
-testing and 'install' to set up the service.
+You generally do not run this yourself.
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := initConfig(); err != nil {
-				return err
-			}
 			a, err := newAgent()
 			if err != nil {
 				return err
@@ -51,11 +47,10 @@ func newInstallCmd() *cobra.Command {
 		Use:   "install",
 		Short: "Register and start the Windows service",
 		Long: strings.TrimSpace(`
-install registers rcmd-agent as a Windows service that starts
-automatically at boot. Requires Administrator.
-
-By default it uses this binary's full path. Use --bin-path to override
-(useful when staging the binary elsewhere before running install).
+install registers rcmd-agent as a Windows service that starts at boot.
+Requires Administrator. Normally 'rcmd-agent join' does this for you —
+this command is here for cases where you want to (re-)install the
+service against an existing state file.
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := binPath
@@ -66,29 +61,7 @@ By default it uses this binary's full path. Use --bin-path to override
 				}
 				path = p
 			}
-			m, err := mgr.Connect()
-			if err != nil {
-				return fmt.Errorf("connect to SCM: %w", err)
-			}
-			defer m.Disconnect()
-			if s, err := m.OpenService(ServiceName); err == nil {
-				s.Close()
-				return fmt.Errorf("service %q already exists; run uninstall first", ServiceName)
-			}
-			s, err := m.CreateService(ServiceName, path, mgr.Config{
-				DisplayName: "rcmd remote-exec agent",
-				Description: "Polls the rcmd relay for encrypted commands.",
-				StartType:   mgr.StartAutomatic,
-			}, "service")
-			if err != nil {
-				return fmt.Errorf("create service: %w", err)
-			}
-			defer s.Close()
-			if err := s.Start(); err != nil {
-				return fmt.Errorf("start service: %w", err)
-			}
-			fmt.Printf("installed and started %q (bin: %s)\n", ServiceName, path)
-			return nil
+			return installService(path)
 		},
 	}
 	cmd.Flags().StringVar(&binPath, "bin-path", "", "explicit path to rcmd-agent.exe (default: this binary)")
@@ -100,23 +73,7 @@ func newUninstallCmd() *cobra.Command {
 		Use:   "uninstall",
 		Short: "Stop and remove the Windows service",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := mgr.Connect()
-			if err != nil {
-				return fmt.Errorf("connect to SCM: %w", err)
-			}
-			defer m.Disconnect()
-			s, err := m.OpenService(ServiceName)
-			if err != nil {
-				return fmt.Errorf("open service: %w", err)
-			}
-			defer s.Close()
-			_, _ = s.Control(svc.Stop) // best-effort stop
-			time.Sleep(500 * time.Millisecond)
-			if err := s.Delete(); err != nil {
-				return fmt.Errorf("delete service: %w", err)
-			}
-			fmt.Printf("removed %q\n", ServiceName)
-			return nil
+			return uninstallService()
 		},
 	}
 }
@@ -139,6 +96,57 @@ func newStopCmd() *cobra.Command {
 			return serviceControl(svc.Stop, "stop")
 		},
 	}
+}
+
+// installService creates and starts the SCM service pointed at binPath.
+// Idempotent-ish: if the service already exists it's an error; remove
+// with uninstallService first. Exported for use from `join`.
+func installService(binPath string) error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect to SCM: %w", err)
+	}
+	defer m.Disconnect()
+	if s, err := m.OpenService(ServiceName); err == nil {
+		s.Close()
+		return fmt.Errorf("service %q already exists; run uninstall (or leave) first", ServiceName)
+	}
+	s, err := m.CreateService(ServiceName, binPath, mgr.Config{
+		DisplayName: "rcmd remote-exec agent",
+		Description: "Polls the rcmd relay for encrypted commands.",
+		StartType:   mgr.StartAutomatic,
+	}, "service")
+	if err != nil {
+		return fmt.Errorf("create service: %w", err)
+	}
+	defer s.Close()
+	if err := s.Start(); err != nil {
+		return fmt.Errorf("start service: %w", err)
+	}
+	fmt.Printf("installed and started %q (bin: %s)\n", ServiceName, binPath)
+	return nil
+}
+
+// uninstallService stops + deletes the SCM service. No-op safe if the
+// service does not exist (returns the open error).
+func uninstallService() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect to SCM: %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(ServiceName)
+	if err != nil {
+		return fmt.Errorf("open service: %w", err)
+	}
+	defer s.Close()
+	_, _ = s.Control(svc.Stop) // best-effort
+	time.Sleep(500 * time.Millisecond)
+	if err := s.Delete(); err != nil {
+		return fmt.Errorf("delete service: %w", err)
+	}
+	fmt.Printf("removed %q\n", ServiceName)
+	return nil
 }
 
 func serviceControl(c svc.Cmd, op string) error {

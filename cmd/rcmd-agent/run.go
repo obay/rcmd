@@ -19,31 +19,29 @@ import (
 	"github.com/obay/rcmd/internal/api"
 	"github.com/obay/rcmd/internal/auth"
 	"github.com/obay/rcmd/internal/crypto"
+	"github.com/obay/rcmd/internal/state"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const agentUserAgent = "rcmd-agent/0.1 (+https://github.com/obay/rcmd)"
 
 func newRunCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "run",
-		Short: "Run the agent in the foreground",
+		Use:          "run",
+		Short:        "Run the agent loop in the foreground",
+		SilenceUsage: true,
 		Long: strings.TrimSpace(`
 run starts the agent's main loop in the foreground: long-poll the
 relay for a command, execute it, post the encrypted result, repeat.
 
-Use this for first-time testing. To run as a Windows service instead,
-use 'rcmd-agent install'.
+Use this for first-time testing or on non-Windows dev hosts. On
+Windows production hosts 'rcmd-agent join' installs the SCM service
+which calls this same loop in the background.
 
 Connection failures back off exponentially (1s → 30s cap). The agent
-honors HTTPS_PROXY / HTTP_PROXY env vars so it works behind explicit
-corporate proxies.
+honors HTTPS_PROXY / HTTP_PROXY env vars.
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := initConfig(); err != nil {
-				return err
-			}
 			a, err := newAgent()
 			if err != nil {
 				return err
@@ -59,7 +57,7 @@ corporate proxies.
 type agent struct {
 	relayURL   string
 	agentID    string
-	agentKey   []byte
+	hmacKey    []byte
 	payloadKey []byte
 	http       *http.Client
 	log        *log.Logger
@@ -67,39 +65,32 @@ type agent struct {
 }
 
 func newAgent() (*agent, error) {
-	relayURL := strings.TrimRight(viper.GetString("relay_url"), "/")
-	if relayURL == "" {
-		return nil, errors.New("config: relay_url is required")
-	}
-	agentID := viper.GetString("agent_id")
-	if agentID == "" {
-		return nil, errors.New("config: agent_id is required")
-	}
-	akB64 := viper.GetString("agent_key")
-	pkB64 := viper.GetString("payload_key")
-	if akB64 == "" || pkB64 == "" {
-		return nil, errors.New("config: agent_key and payload_key are required")
-	}
-	ak, err := crypto.ParseKey(akB64)
+	s, err := state.LoadAgent(statePath)
 	if err != nil {
-		return nil, fmt.Errorf("agent_key: %w", err)
+		return nil, err
 	}
-	pk, err := crypto.ParseKey(pkB64)
-	if err != nil {
-		return nil, fmt.Errorf("payload_key: %w", err)
+	if s.RelayURL == "" {
+		return nil, errors.New("state: relay_url is empty")
 	}
-	logger, err := openLogger(viper.GetString("log_file"))
+	if s.AgentID == "" {
+		return nil, errors.New("state: agent_id is empty")
+	}
+	master, err := base64.StdEncoding.DecodeString(s.MasterSecret)
+	if err != nil || len(master) != crypto.MasterSecretBytes {
+		return nil, errors.New("state: master_secret is missing or malformed")
+	}
+	logger, err := openLogger(s.LogFile)
 	if err != nil {
 		return nil, err
 	}
 	return &agent{
-		relayURL:   relayURL,
-		agentID:    agentID,
-		agentKey:   ak,
-		payloadKey: pk,
+		relayURL:   strings.TrimRight(s.RelayURL, "/"),
+		agentID:    s.AgentID,
+		hmacKey:    crypto.DeriveHMACSubkey(master),
+		payloadKey: crypto.DeriveAEADSubkey(master),
 		http:       &http.Client{Timeout: 0, Transport: http.DefaultTransport},
 		log:        logger,
-		defShell:   viper.GetString("default_shell"),
+		defShell:   s.DefaultShell,
 	}, nil
 }
 
@@ -159,7 +150,7 @@ func (a *agent) pollOnce(ctx context.Context) (string, api.Envelope, error) {
 	}
 	req.Header.Set("User-Agent", agentUserAgent)
 	req.Header.Set("Accept", "application/json")
-	if err := auth.Sign(req, api.IdentityAgent, a.agentKey, nil); err != nil {
+	if err := auth.Sign(req, a.agentID, a.hmacKey, nil); err != nil {
 		return "", api.Envelope{}, err
 	}
 	resp, err := a.http.Do(req)
@@ -269,7 +260,7 @@ func (a *agent) postResult(ctx context.Context, cid string, res api.Result) {
 	}
 	req.Header.Set("User-Agent", agentUserAgent)
 	req.Header.Set("Content-Type", "application/json")
-	if err := auth.Sign(req, api.IdentityAgent, a.agentKey, body); err != nil {
+	if err := auth.Sign(req, a.agentID, a.hmacKey, body); err != nil {
 		a.log.Printf("sign result %s: %v", cid, err)
 		return
 	}
