@@ -27,20 +27,20 @@ func newRootCmd() *cobra.Command {
 		Short: "Operator CLI for the obcmd remote-exec relay",
 		Long: strings.TrimSpace(`
 obcmd is the operator CLI for obcmd. It ships AES-256-GCM encrypted
-commands and small files to a remote agent (the SPS Dell laptop) via a
-self-hosted relay over plain HTTPS — so it works through aggressive
-corporate firewalls that block SSH and inspect TLS.
+commands and small files to a remote Windows agent via a self-hosted
+relay over plain HTTPS — so it works through aggressive corporate
+firewalls that block SSH and inspect TLS.
 
 Quick start:
   obcmd keygen --count 3            # generate keys (one each: agent_key, operator_key, payload_key)
   $EDITOR ~/.config/obcmd/config.toml
-  obcmd run "hostname"              # run a command on the Dell
+  obcmd run "hostname"              # run a command on the agent
   obcmd push notes.txt C:\Users\Public\notes.txt
-  obcmd pull C:\Windows\System32\drivers\etc\hosts hosts.dell
+  obcmd pull C:\Windows\System32\drivers\etc\hosts hosts.remote
 
 Config (key = value):
   relay_url            = "https://ai.obay.cloud"
-  agent_id             = "sps-dell"
+  agent_id             = "win-host"
   operator_key         = "<base64 32B>"
   payload_key          = "<base64 32B>"
   default_shell        = "cmd"        # or "powershell"
@@ -74,7 +74,7 @@ func initConfig() error {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	viper.SetDefault("agent_id", "sps-dell")
+	viper.SetDefault("agent_id", "win-host")
 	viper.SetDefault("default_shell", "cmd")
 	viper.SetDefault("default_timeout_secs", 60)
 
@@ -149,9 +149,9 @@ EXAMPLES
   # -> {"kind":"keygen","count":3,"keys":["...","...","..."]}
 
 WHERE TO PUT THEM
-  relay /etc/obcmd/obcmdd.toml             agent_key + operator_key
-  Dell  %PROGRAMDATA%\obcmd\agent.toml      agent_key + payload_key
-  Mac   ~/.config/obcmd/config.toml         operator_key + payload_key
+  relay    /etc/obcmd/obcmdd.toml             agent_key + operator_key
+  agent    %PROGRAMDATA%\obcmd\agent.toml      agent_key + payload_key
+  operator ~/.config/obcmd/config.toml         operator_key + payload_key
 `),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

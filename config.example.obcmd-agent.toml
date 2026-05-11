@@ -4,7 +4,7 @@
 #       /usr/local/etc/obcmd/agent.toml         (macOS)
 
 relay_url = "https://ai.obay.cloud"
-agent_id  = "sps-dell"
+agent_id  = "win-host"
 
 # Pre-shared keys (base64, 32 bytes each).
 # agent_key   — shared with the relay (NOT with the operator).

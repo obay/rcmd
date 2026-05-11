@@ -39,10 +39,9 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 
-  # obcmd-agent — the remote-exec agent. Ships ONLY for Windows amd64
-  # (that's the SPS Dell). The source still cross-compiles to darwin/
-  # linux via build tags for local development, but we don't release
-  # those artifacts.
+  # obcmd-agent — the remote-exec agent. Ships ONLY for Windows amd64.
+  # The source still cross-compiles to darwin/linux via build tags for
+  # local development, but we don't release those artifacts.
   - id: obcmd-agent
     main: ./cmd/obcmd-agent
     binary: obcmd-agent

@@ -34,7 +34,7 @@ EXAMPLES
   obcmd status --json
   # -> {"kind":"status","relay_url":"https://ai.obay.cloud",
   #     "relay_ok":true,"relay_latency_ms":42,
-  #     "agent_id":"sps-dell","agent_ok":true,"agent_latency_ms":188}
+  #     "agent_id":"win-host","agent_ok":true,"agent_latency_ms":188}
 
 EXIT CODES
   0   both relay and agent OK

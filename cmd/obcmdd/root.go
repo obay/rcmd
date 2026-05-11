@@ -21,8 +21,8 @@ func newRootCmd() *cobra.Command {
 		Short: "obcmd relay server",
 		Long: strings.TrimSpace(`
 obcmdd is the obcmd relay server. It runs on a VPS at a domain you
-own and brokers encrypted commands between the obcmd CLI (Mac) and
-the obcmd-agent (Dell, Windows).
+own and brokers encrypted commands between the obcmd operator CLI and
+the obcmd-agent (Windows).
 
 The relay only ever sees encrypted envelopes — command text, file
 contents, and output never appear in cleartext on the relay. All
@@ -54,7 +54,7 @@ func initConfig() error {
 	viper.SetDefault("listen_addr", ":443")
 	viper.SetDefault("http_addr", ":80")
 	viper.SetDefault("acme_cache_dir", "/var/lib/obcmd/autocert")
-	viper.SetDefault("agent_ids", []string{"sps-dell"})
+	viper.SetDefault("agent_ids", []string{"win-host"})
 	viper.SetDefault("insecure", false)
 	viper.SetDefault("insecure_addr", ":8080")
 

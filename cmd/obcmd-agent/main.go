@@ -1,7 +1,7 @@
 // Command obcmd-agent is the obcmd remote-execution agent.
 //
-// It runs on the target machine (typically the SPS Dell laptop on
-// Windows) and polls the relay over HTTPS for encrypted commands.
+// It runs on the target Windows host and polls the relay over HTTPS
+// for encrypted commands.
 // When a command arrives it executes locally, captures output, and
 // posts an encrypted result back. The agent only ever makes outbound
 // HTTPS connections — never accepts inbound — so it works through

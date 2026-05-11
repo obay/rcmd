@@ -23,7 +23,7 @@ flowchart LR
     subgraph vps["VPS (ai.obay.cloud)"]
         relay["<b>obcmdd</b><br/>(relay)"]
     end
-    subgraph dell["Dell (Windows)"]
+    subgraph win["Windows host"]
         agent["<b>obcmd-agent</b><br/>(service)"]
     end
 
@@ -34,7 +34,7 @@ flowchart LR
     agent -- "POST result" --> relay
 
     classDef edge fill:#f6f8fa,stroke:#8b949e,stroke-width:1px,color:#24292f
-    class mac,vps,dell edge
+    class mac,vps,win edge
 ```
 
 > Both sides only ever make **outbound HTTPS to :443**.
@@ -46,8 +46,8 @@ Three Go binaries:
 | Binary         | Where it runs         | What it does                                         |
 | -------------- | --------------------- | ---------------------------------------------------- |
 | `obcmdd`      | Your VPS (linux)      | HTTPS relay (Let's Encrypt). Stores only ciphertext. |
-| `obcmd-agent` | The Dell (Windows)    | Long-polls the relay; executes; posts results.       |
-| `obcmd`       | Your Mac (any OS)     | Operator CLI: `run`, `push`, `pull`, `status`.       |
+| `obcmd-agent` | Windows host          | Long-polls the relay; executes; posts results.       |
+| `obcmd`       | Operator workstation  | Operator CLI: `run`, `push`, `pull`, `status`.       |
 
 Transport: HTTPS long-polling on :443. No persistent sockets, no SSH, no third-party tunneling service. Indistinguishable from any web app a browser would talk to.
 
@@ -64,14 +64,14 @@ Security:
 brew install obay/tap/obcmd
 ```
 
-### Dell / Windows (agent)
+### Windows (agent)
 
 ```pwsh
 scoop bucket add obay https://github.com/obay/scoop-bucket
 scoop install obay/obcmd-agent
 ```
 
-The agent is built for Windows amd64 only — that's the SPS Dell.
+The agent is released for Windows amd64 only.
 
 ### VPS / Linux (relay)
 
@@ -93,7 +93,7 @@ sudo cp deploy/obcmdd.service /etc/systemd/system/
 
 Generate keys once on any machine — `obcmd keygen --count 3` prints three 32-byte base64 keys. Use them as:
 
-| Key            | VPS (`obcmdd.toml`) | Dell (`agent.toml`) | Mac (`config.toml`) |
+| Key            | VPS (`obcmdd.toml`) | Agent (`agent.toml`) | Operator (`config.toml`) |
 | -------------- | :------------------: | :-----------------: | :-----------------: |
 | `agent_key`    | ✅                    | ✅                   |                     |
 | `operator_key` | ✅                    |                     | ✅                   |
@@ -114,7 +114,7 @@ sudo systemctl enable --now obcmdd
 
 DNS: point your domain (e.g. `ai.obay.cloud`) at the VPS. Open inbound :80 and :443.
 
-### Dell (Windows)
+### Windows (agent)
 
 After `scoop install obay/obcmd-agent`:
 
@@ -124,7 +124,7 @@ After `scoop install obay/obcmd-agent`:
 obcmd-agent install
 ```
 
-### Mac
+### Operator (Mac/Linux)
 
 ```sh
 mkdir -p ~/.config/obcmd
@@ -140,7 +140,7 @@ obcmd run "ipconfig /all"                   # cmd.exe
 obcmd run --shell powershell "Get-Process"  # powershell.exe
 obcmd run --timeout 300 -- ipconfig /all    # custom timeout
 obcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
-obcmd pull C:\Windows\System32\drivers\etc\hosts ./hosts.dell
+obcmd pull C:\Windows\System32\drivers\etc\hosts ./hosts.remote
 ```
 
 Exit code mirrors the agent-side command. Stdout goes to stdout, stderr to stderr, so you can pipe normally:

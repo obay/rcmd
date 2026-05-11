@@ -20,7 +20,7 @@ agent_key    = ""
 operator_key = ""
 
 # Agent IDs the relay accepts.
-agent_ids = ["sps-dell"]
+agent_ids = ["win-host"]
 
 # Set to true to skip TLS and listen on insecure_addr — useful for
 # local testing only. Never enable in production.

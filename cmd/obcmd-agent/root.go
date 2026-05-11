@@ -53,9 +53,9 @@ func newRootCmd() *cobra.Command {
 		Use:   "obcmd-agent",
 		Short: "obcmd remote-execution agent",
 		Long: strings.TrimSpace(fmt.Sprintf(`
-obcmd-agent runs on the target machine (typically the SPS Dell laptop)
-and polls the obcmd relay over HTTPS for encrypted commands. Outbound
-connections only — no inbound listening.
+obcmd-agent runs on the target Windows host and polls the obcmd relay
+over HTTPS for encrypted commands. Outbound connections only — no
+inbound listening.
 
 Quick start:
   obcmd-agent keygen --count 2     # one agent_key, one payload_key
@@ -68,7 +68,7 @@ Windows service install:
 
 Config (key = value):
   relay_url      = "https://ai.obay.cloud"
-  agent_id       = "sps-dell"
+  agent_id       = "win-host"
   agent_key      = "<base64 32B>"   # shared with relay
   payload_key    = "<base64 32B>"   # shared with operator
   log_file       = "%s"
@@ -100,7 +100,7 @@ func initConfig() error {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	viper.SetDefault("agent_id", "sps-dell")
+	viper.SetDefault("agent_id", "win-host")
 	viper.SetDefault("log_file", defaultLogPath())
 	if runtime.GOOS == "windows" {
 		viper.SetDefault("default_shell", "cmd")

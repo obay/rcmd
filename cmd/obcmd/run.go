@@ -27,7 +27,7 @@ DESCRIPTION
   stdout and stderr, and exits with the agent-side exit code.
 
 EXAMPLES
-  # Basic command, default shell from config (cmd.exe on the Dell):
+  # Basic command, default shell from config (cmd.exe on the agent):
   obcmd run "ipconfig /all"
 
   # Pick the shell per-call:
@@ -41,7 +41,7 @@ EXAMPLES
 
   # Machine-readable output for scripts and AI agents:
   obcmd run --json "hostname"
-  # -> {"kind":"exec_result","exit_code":0,"stdout":"DELL-LAPTOP\r\n",
+  # -> {"kind":"exec_result","exit_code":0,"stdout":"WIN-HOST\r\n",
   #     "stderr":"","duration_ms":42,"truncated":false}
 
 OUTPUT

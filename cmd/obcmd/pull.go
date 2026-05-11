@@ -24,7 +24,7 @@ DESCRIPTION
   the relay only sees ciphertext.
 
 EXAMPLES
-  obcmd pull C:\Windows\System32\drivers\etc\hosts ./hosts.dell
+  obcmd pull C:\Windows\System32\drivers\etc\hosts ./hosts.remote
   obcmd pull --json C:\hosts.bak ./hosts.bak
   # -> {"kind":"pull_result","ok":true,"size":237,
   #     "path_remote":"C:\\hosts.bak","path_local":"./hosts.bak",

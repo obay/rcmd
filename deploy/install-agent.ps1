@@ -44,7 +44,7 @@ if (-not (Test-Path $cfgPath)) {
     @'
 # obcmd-agent config
 relay_url   = "https://ai.obay.cloud"
-agent_id    = "sps-dell"
+agent_id    = "win-host"
 agent_key   = ""   # base64 32B — same as relay's agent_key
 payload_key = ""   # base64 32B — same as operator's payload_key
 log_file    = "C:\\ProgramData\\obcmd\\agent.log"
