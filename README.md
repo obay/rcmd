@@ -1,5 +1,18 @@
 # obcmd
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/obay/obcmd?logo=go&logoColor=white)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/obay/obcmd?logo=github&color=brightgreen)](https://github.com/obay/obcmd/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/obay/obcmd/release.yml?logo=githubactions&logoColor=white&label=release)](https://github.com/obay/obcmd/actions/workflows/release.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/obay/obcmd/ci.yml?logo=githubactions&logoColor=white&label=ci)](https://github.com/obay/obcmd/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/obay/obcmd)](https://goreportcard.com/report/github.com/obay/obcmd)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20linux%20%7C%20windows-lightgrey?logo=apple)](https://github.com/obay/obcmd/releases/latest)
+[![Homebrew](https://img.shields.io/badge/brew-obay%2Ftap%2Fobcmd-orange?logo=homebrew&logoColor=white)](https://github.com/obay/homebrew-tap)
+[![Scoop](https://img.shields.io/badge/scoop-obay%2Fobcmd--agent-blue)](https://github.com/obay/scoop-bucket)
+[![Transport](https://img.shields.io/badge/transport-HTTPS%20%3A443-success?logo=letsencrypt&logoColor=white)](#how-it-works)
+[![Crypto](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20HMAC-critical?logo=keycdn&logoColor=white)](#how-it-works)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/obay/obcmd/pulls)
+
 Remote command execution that works through aggressive corporate firewalls. Designed for the case where SSH is blocked, TLS is inspected, and everything is deny-by-default — but outbound HTTPS to a domain you own still works (because almost nothing on the internet would work otherwise).
 
 ```
