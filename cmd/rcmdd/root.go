@@ -22,10 +22,10 @@ rcmdd is the rcmd relay server. It runs on a Linux host and brokers
 encrypted commands between the rcmd operator CLI and the rcmd-agent
 (Windows).
 
-First-time setup on the relay host:
+First-time setup on the relay host (after installing the .deb / .rpm):
 
   sudo rcmdd init --domain relay.example.com
-  sudo systemctl enable --now rcmdd     # or: brew services start rcmdd
+  sudo systemctl enable --now rcmdd
 
 Day-2 ops:
 

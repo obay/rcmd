@@ -64,12 +64,19 @@ Refuses to run without confirmation. Pass --yes to skip the prompt
 			if err != nil {
 				return fmt.Errorf("mint token: %w", err)
 			}
-			fmt.Println("Master secret rotated. New join token:")
+			fmt.Println("Master secret rotated.")
 			fmt.Println()
-			fmt.Printf("  %s\n", tok)
+			fmt.Println("  1. Restart the relay:")
 			fmt.Println()
-			fmt.Println("Now: systemctl restart rcmdd  (or: brew services restart rcmdd)")
-			fmt.Println("Then re-run 'rcmd join' / 'rcmd-agent join' on every party with the new token.")
+			fmt.Println("       sudo systemctl restart rcmdd")
+			fmt.Println()
+			fmt.Println("  2. On each Windows agent (elevated PowerShell):")
+			fmt.Println()
+			fmt.Printf("       rcmd-agent join %s --force\n", tok)
+			fmt.Println()
+			fmt.Println("  3. On each operator machine:")
+			fmt.Println()
+			fmt.Printf("       rcmd join %s --force\n", tok)
 			return nil
 		},
 	}

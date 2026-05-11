@@ -25,7 +25,7 @@ import (
 func newServeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:          "serve",
-		Short:        "Run the relay (invoked by systemd / brew services)",
+		Short:        "Run the relay (invoked by systemd)",
 		SilenceUsage: true,
 		RunE:         runServe,
 	}
