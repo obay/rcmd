@@ -47,13 +47,23 @@ type Envelope struct {
 // Command is the cleartext payload sealed into an Envelope by the
 // operator and opened by the agent.
 type Command struct {
-	Kind        string `json:"kind"`                   // exec | push | pull
+	Kind        string `json:"kind"`                   // exec | push | pull | fetch_transfer | produce_transfer
 	Cmd         string `json:"cmd,omitempty"`          // exec
 	Shell       string `json:"shell,omitempty"`        // exec
 	TimeoutSecs int    `json:"timeout_secs,omitempty"` // exec
 	Cwd         string `json:"cwd,omitempty"`          // exec
-	RemotePath  string `json:"remote_path,omitempty"`  // push, pull
-	DataB64     string `json:"data_b64,omitempty"`     // push
+	RemotePath  string `json:"remote_path,omitempty"`  // push, pull, *transfer
+	DataB64     string `json:"data_b64,omitempty"`     // push (single-shot, legacy)
+	// Transfer-mode fields. Used when Kind is fetch_transfer or
+	// produce_transfer. The agent uses the transfer-related URLs on
+	// the relay (/v1/transfers/{id}/...) to move bytes; the relay
+	// holds the ciphertext between the two parties.
+	TransferID  string `json:"transfer_id,omitempty"`  // fetch_transfer, produce_transfer
+	TotalChunks int    `json:"total_chunks,omitempty"` // fetch_transfer
+	ChunkSize   int64  `json:"chunk_size,omitempty"`   // fetch_transfer, produce_transfer
+	TotalSize   int64  `json:"total_size,omitempty"`   // fetch_transfer
+	SHA256Hex   string `json:"sha256_hex,omitempty"`   // fetch_transfer
+	Compression string `json:"compression,omitempty"`  // fetch_transfer, produce_transfer
 }
 
 // Result is the cleartext payload sealed by the agent and opened by
@@ -100,4 +110,75 @@ type ResultResponse struct {
 // operator can see which agents have been seen by the relay.
 type ListAgentsResponse struct {
 	Agents []string `json:"agents"`
+}
+
+// ---- Transfers ----
+//
+// All transfer requests are signed exactly like every other rcmd
+// request: HMAC headers + the usual replay protection. Chunk bodies
+// are raw ciphertext (AES-GCM with per-chunk nonce + AAD = chunk
+// index, key derived from master via HKDF). The relay never decrypts.
+
+const (
+	// Kinds of commands enqueued by the operator (via the existing
+	// queue) to drive transfer flows on the agent side.
+	KindFetchTransfer   = "fetch_transfer"   // agent: download a "push" transfer + write file
+	KindProduceTransfer = "produce_transfer" // agent: read a file + upload as "pull" transfer
+)
+
+// CreateTransferRequest is the operator → relay body that opens a new
+// transfer. Sent in cleartext (not in an Envelope) because the relay
+// needs to read the fields for storage routing. Sensitive contents
+// (the actual file bytes) are never in this struct.
+type CreateTransferRequest struct {
+	Direction   string `json:"direction"`   // "push" | "pull"
+	AgentID     string `json:"agent_id"`    // target agent
+	RemotePath  string `json:"remote_path"` // path on the agent
+	TotalSize   int64  `json:"total_size"`  // plaintext bytes
+	ChunkSize   int64  `json:"chunk_size"`
+	TotalChunks int    `json:"total_chunks"`
+	SHA256Hex   string `json:"sha256_hex"`   // sha256 of plaintext (post-compression-if-any)
+	Compression string `json:"compression"`  // "zstd" | "none"
+}
+
+// CreateTransferResponse carries the relay's allocated transfer ID.
+type CreateTransferResponse struct {
+	TransferID string `json:"transfer_id"`
+}
+
+// TransferStatusResponse returns the live manifest. ReceivedBitmap
+// tells the uploader/downloader exactly which chunk indices are
+// present, supporting resume.
+type TransferStatusResponse struct {
+	ID             string `json:"id"`
+	Direction      string `json:"direction"`
+	State          string `json:"state"`
+	TotalChunks    int    `json:"total_chunks"`
+	ReceivedBitmap []bool `json:"received_bitmap"`
+	RemotePath     string `json:"remote_path"`
+	Compression    string `json:"compression"`
+	SHA256Hex      string `json:"sha256_hex"`
+	TotalSize      int64  `json:"total_size"`
+	ChunkSize      int64  `json:"chunk_size"`
+}
+
+// FetchTransferCmd is the inner command body for KindFetchTransfer.
+// Sealed inside the existing Envelope so the agent decrypts it like
+// any other command.
+type FetchTransferCmd struct {
+	TransferID  string `json:"transfer_id"`
+	RemotePath  string `json:"remote_path"`
+	TotalChunks int    `json:"total_chunks"`
+	ChunkSize   int64  `json:"chunk_size"`
+	TotalSize   int64  `json:"total_size"`
+	SHA256Hex   string `json:"sha256_hex"`
+	Compression string `json:"compression"`
+}
+
+// ProduceTransferCmd is the inner command body for KindProduceTransfer.
+type ProduceTransferCmd struct {
+	TransferID  string `json:"transfer_id"`
+	RemotePath  string `json:"remote_path"`
+	ChunkSize   int64  `json:"chunk_size"`
+	Compression string `json:"compression"`
 }

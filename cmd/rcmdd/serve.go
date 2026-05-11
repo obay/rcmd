@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/obay/rcmd/internal/crypto"
 	"github.com/obay/rcmd/internal/queue"
 	"github.com/obay/rcmd/internal/state"
+	"github.com/obay/rcmd/internal/transfer"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
@@ -49,15 +51,29 @@ func runServe(cmd *cobra.Command, args []string) error {
 		st.Operators = map[string]state.Identity{}
 	}
 
+	transferRoot := filepath.Join(filepath.Dir(statePath), "..", "lib", "rcmd", "transfers")
+	if v := os.Getenv("RCMDD_TRANSFER_ROOT"); v != "" {
+		transferRoot = v
+	} else if st.ACMECacheDir != "" {
+		// /var/lib/rcmd/autocert is conventional; put transfers next to it.
+		transferRoot = filepath.Join(filepath.Dir(st.ACMECacheDir), "transfers")
+	}
+	transfers, err := transfer.NewStore(transferRoot)
+	if err != nil {
+		return err
+	}
+
 	srv := &server{
-		state:   st,
-		store:   queue.New(),
-		hmacKey: hmacKey,
-		nonces:  auth.NewNonceCache(),
-		log:     log.New(os.Stdout, "rcmdd ", log.LstdFlags|log.Lmsgprefix),
-		dirtyMu: &sync.Mutex{},
+		state:     st,
+		store:     queue.New(),
+		transfers: transfers,
+		hmacKey:   hmacKey,
+		nonces:    auth.NewNonceCache(),
+		log:       log.New(os.Stdout, "rcmdd ", log.LstdFlags|log.Lmsgprefix),
+		dirtyMu:   &sync.Mutex{},
 	}
 	srv.startFlusher()
+	srv.startTransferGC()
 
 	mux := http.NewServeMux()
 	srv.routes(mux)

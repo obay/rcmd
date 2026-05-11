@@ -12,14 +12,16 @@ import (
 	"github.com/obay/rcmd/internal/auth"
 	"github.com/obay/rcmd/internal/queue"
 	"github.com/obay/rcmd/internal/state"
+	"github.com/obay/rcmd/internal/transfer"
 )
 
 type server struct {
-	state   *state.RelayState
-	store   *queue.Store
-	hmacKey []byte
-	nonces  *auth.NonceCache
-	log     *log.Logger
+	state     *state.RelayState
+	store     *queue.Store
+	transfers *transfer.Store
+	hmacKey   []byte
+	nonces    *auth.NonceCache
+	log       *log.Logger
 
 	dirtyMu *sync.Mutex
 	dirty   bool
@@ -35,6 +37,8 @@ func (s *server) routes(mux *http.ServeMux) {
 	// Agent-initiated:
 	mux.HandleFunc("GET /v1/agents/{id}/poll", s.auth(s.recordAgent(s.poll)))
 	mux.HandleFunc("POST /v1/agents/{id}/results/{cid}", s.auth(s.recordAgent(s.postResult)))
+	// Transfers (used by both operator and agent depending on direction):
+	s.transferRoutes(mux)
 }
 
 func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {
