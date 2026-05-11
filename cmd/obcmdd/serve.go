@@ -18,6 +18,7 @@ import (
 	"github.com/obay/obcmd/internal/queue"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -29,7 +30,8 @@ func newServeCmd() *cobra.Command {
 serve starts the relay on the configured listen address.
 
 By default it serves HTTPS on :443 using Let's Encrypt (autocert) for
-the configured domain, with a :80 listener for HTTP-01 challenges.
+the configured domain. Cert provisioning uses TLS-ALPN-01 on the same
+port, so port 80 is not required.
 Use --insecure for plain HTTP on a custom port (testing only).
 
 Required config keys:
@@ -105,33 +107,36 @@ func runServe(cmd *cobra.Command, args []string) error {
 		HostPolicy: autocert.HostWhitelist(domain),
 		Email:      viper.GetString("acme_email"),
 	}
+	tlsCfg := mgr.TLSConfig()
+	tlsCfg.MinVersion = tls.VersionTLS12
+	if !containsString(tlsCfg.NextProtos, acme.ALPNProto) {
+		tlsCfg.NextProtos = append(tlsCfg.NextProtos, acme.ALPNProto)
+	}
 	httpsSrv := &http.Server{
 		Addr:              viper.GetString("listen_addr"),
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig:         &tls.Config{GetCertificate: mgr.GetCertificate, MinVersion: tls.VersionTLS12},
+		TLSConfig:         tlsCfg,
 	}
-	httpSrv := &http.Server{
-		Addr:              viper.GetString("http_addr"),
-		Handler:           mgr.HTTPHandler(nil),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	srv.log.Printf("listening on %s (https for %s) and %s (http-01 challenge)", httpsSrv.Addr, domain, httpSrv.Addr)
+	srv.log.Printf("listening on %s (https for %s, ACME TLS-ALPN-01)", httpsSrv.Addr, domain)
 
-	go func() {
-		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			srv.log.Printf("http listener error: %v", err)
-		}
-	}()
 	go func() {
 		<-ctx.Done()
 		shutdown(httpsSrv, srv.log)
-		shutdown(httpSrv, srv.log)
 	}()
 	if err := httpsSrv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+func containsString(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func shutdown(s *http.Server, l *log.Logger) {

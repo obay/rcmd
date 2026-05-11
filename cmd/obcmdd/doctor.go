@@ -60,7 +60,6 @@ EXIT CODES
 
 			domain := viper.GetString("domain")
 			listenAddr := viper.GetString("listen_addr")
-			httpAddr := viper.GetString("http_addr")
 			acmeDir := viper.GetString("acme_cache_dir")
 			insecure := viper.GetBool("insecure")
 			ak := viper.GetString("agent_key")
@@ -69,7 +68,6 @@ EXIT CODES
 
 			report["domain"] = domain
 			report["listen_addr"] = listenAddr
-			report["http_addr"] = httpAddr
 			report["acme_cache_dir"] = acmeDir
 			report["insecure"] = insecure
 			report["agent_ids"] = agentIDs
@@ -81,7 +79,6 @@ EXIT CODES
 				fmt.Printf("config         %s  OK\n", viper.ConfigFileUsed())
 				fmt.Printf("domain         %s\n", domain)
 				fmt.Printf("listen_addr    %s\n", listenAddr)
-				fmt.Printf("http_addr      %s\n", httpAddr)
 				fmt.Printf("agent_ids      %v\n", agentIDs)
 				fmt.Printf("insecure       %v\n", insecure)
 				printKeyStatus("agent_key   ", ak, report, "agent_key_error")
@@ -118,11 +115,8 @@ EXIT CODES
 
 			// Listen addr parse check.
 			parseOK := true
-			for _, addr := range []string{listenAddr, httpAddr} {
-				if addr == "" {
-					continue
-				}
-				if _, _, err := net.SplitHostPort(addr); err != nil {
+			if listenAddr != "" {
+				if _, _, err := net.SplitHostPort(listenAddr); err != nil {
 					report["listen_parse_error"] = err.Error()
 					parseOK = false
 				}

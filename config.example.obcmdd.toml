@@ -4,10 +4,10 @@
 # Domain you control. Required unless insecure=true.
 domain = "relay.example.com"
 
-# HTTPS listener (Let's Encrypt via autocert).
+# HTTPS listener. Let's Encrypt provisioning uses TLS-ALPN-01 on this
+# same port, so :443 is the only port obcmdd needs reachable inbound
+# (port 80 is not required).
 listen_addr = ":443"
-# HTTP listener — only used for the ACME HTTP-01 challenge.
-http_addr = ":80"
 
 # Cache directory for the Let's Encrypt cert.
 acme_cache_dir = "/var/lib/obcmd/autocert"

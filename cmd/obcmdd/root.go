@@ -52,7 +52,6 @@ func initConfig() error {
 	viper.AutomaticEnv()
 
 	viper.SetDefault("listen_addr", ":443")
-	viper.SetDefault("http_addr", ":80")
 	viper.SetDefault("acme_cache_dir", "/var/lib/obcmd/autocert")
 	viper.SetDefault("agent_ids", []string{"win-host"})
 	viper.SetDefault("insecure", false)

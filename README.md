@@ -1,199 +1,221 @@
 # obcmd
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/obay/obcmd?logo=go&logoColor=white)](https://go.dev/)
-[![Release](https://img.shields.io/github/v/release/obay/obcmd?logo=github&color=brightgreen)](https://github.com/obay/obcmd/releases/latest)
+[![Release](https://img.shields.io/github/v/release/obay/obcmd?logo=github)](https://github.com/obay/obcmd/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/obay/obcmd/release.yml?logo=githubactions&logoColor=white&label=release)](https://github.com/obay/obcmd/actions/workflows/release.yml)
-[![CI](https://img.shields.io/github/actions/workflow/status/obay/obcmd/ci.yml?logo=githubactions&logoColor=white&label=ci)](https://github.com/obay/obcmd/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/obay/obcmd)](https://goreportcard.com/report/github.com/obay/obcmd)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20linux%20%7C%20windows-lightgrey?logo=apple)](https://github.com/obay/obcmd/releases/latest)
-[![Homebrew](https://img.shields.io/badge/brew-obay%2Ftap%2Fobcmd-orange?logo=homebrew&logoColor=white)](https://github.com/obay/homebrew-tap)
-[![Scoop](https://img.shields.io/badge/scoop-obay%2Fobcmd--agent-blue)](https://github.com/obay/scoop-bucket)
-[![Transport](https://img.shields.io/badge/transport-HTTPS%20%3A443-success?logo=letsencrypt&logoColor=white)](#how-it-works)
-[![Crypto](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20HMAC-critical?logo=keycdn&logoColor=white)](#how-it-works)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/obay/obcmd/pulls)
+[![Go](https://img.shields.io/github/go-mod/go-version/obay/obcmd?logo=go&logoColor=white)](https://go.dev/)
 
-Remote command execution over outbound HTTPS. End-to-end encrypted, HMAC-authenticated, and indistinguishable on the wire from ordinary web traffic — suitable for networks where SSH is blocked and TLS is inspected.
+End-to-end encrypted remote command execution over outbound HTTPS — built for networks that block SSH and inspect TLS.
 
 ```mermaid
 flowchart LR
-    subgraph op["Operator"]
-        cli["<b>obcmd</b><br/>(CLI)"]
-    end
-    subgraph host["Relay host"]
-        relay["<b>obcmdd</b><br/>(relay)"]
-    end
-    subgraph win["Windows agent"]
-        agent["<b>obcmd-agent</b><br/>(service)"]
-    end
+    op["<b>obcmd</b><br/>operator"]
+    relay["<b>obcmdd</b><br/>relay · Linux"]
+    agent["<b>obcmd-agent</b><br/>agent · Windows"]
 
-    cli  -- "POST cmd"    --> relay
-    relay -- "GET result"  --> cli
+    op    -- "POST cmd"    --> relay
+    relay -- "GET result"  --> op
     agent -- "poll"        --> relay
     relay -- "return cmd"  --> agent
     agent -- "POST result" --> relay
-
-    classDef edge fill:#f6f8fa,stroke:#8b949e,stroke-width:1px,color:#24292f
-    class op,host,win edge
 ```
 
-> Both sides only ever make **outbound HTTPS to :443**.
+Both sides only ever open **outbound** HTTPS connections. The relay needs inbound **:443**; Let's Encrypt uses TLS-ALPN-01 on the same port, so port 80 is not required.
 
-## How it works
+---
 
-Three Go binaries:
+## Installation
 
-| Binary         | Where it runs         | What it does                                         |
-| -------------- | --------------------- | ---------------------------------------------------- |
-| `obcmdd`      | Linux host            | HTTPS relay (Let's Encrypt). Stores only ciphertext. |
-| `obcmd-agent` | Windows host          | Long-polls the relay; executes; posts results.       |
-| `obcmd`       | Operator workstation  | Operator CLI: `run`, `push`, `pull`, `status`.       |
+Set up the three components in this order: **relay → agent → operator**. The relay must exist before the agent or operator can connect.
 
-Transport: HTTPS long-polling on :443. No persistent sockets, no SSH, no third-party tunneling service. Indistinguishable from any web app a browser would talk to.
+| Component       | Command                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| Relay (Linux)   | `brew install obay/tap/obcmdd`                                       |
+| Agent (Windows) | `scoop bucket add obay https://github.com/obay/scoop-bucket`<br/>`scoop install obay/obcmd-agent` |
+| Operator        | `brew install obay/tap/obcmd`   *(macOS, Linux)*<br/>`scoop install obay/obcmd`   *(Windows)* |
 
-Security:
-- **Authenticity** — every request HMAC-signed with one of two pre-shared keys (`agent_key` or `operator_key`). Replay-protected by timestamp window + nonce cache.
-- **Confidentiality** — command payloads and results are AES-256-GCM encrypted with a third key (`payload_key`) that the relay never sees. Survives corporate TLS inspection.
-- **No cert pinning** — the agent trusts the system store, so corporate MITM CAs work transparently. The AEAD layer on top makes that safe.
+Direct `.deb` / `.rpm` / `.tar.gz` / `.zip` artifacts are also on the [latest release](https://github.com/obay/obcmd/releases/latest) page.
 
-## Install
+---
 
-### Operator (macOS / Linux)
+## Usage
+
+### Relay (`obcmdd`)
+
+#### 1. Generate keys
+
+Run once on the relay host. The three keys you generate here are used by all three components:
 
 ```sh
-brew install obay/tap/obcmd
+$ obcmdd keygen --count 3
+TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU=
+VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38=
+NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30=
 ```
 
-On Windows, use Scoop (`scoop install obay/obcmd`).
+Treat the first line as `agent_key`, the second as `operator_key`, the third as `payload_key`. Each key ends up in exactly two of the three configs:
 
-### Windows (agent)
+| Key            | Relay | Agent | Operator |
+| -------------- | :---: | :---: | :------: |
+| `agent_key`    |  ✅   |  ✅   |          |
+| `operator_key` |  ✅   |       |    ✅    |
+| `payload_key`  |       |  ✅   |    ✅    |
+
+The relay never holds `payload_key`, which is why it can never see plaintext.
+
+#### 2. Write `/etc/obcmd/obcmdd.toml`
+
+```toml
+domain         = "relay.example.com"
+listen_addr    = ":443"
+acme_cache_dir = "/var/lib/obcmd/autocert"
+agent_key      = "TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU="
+operator_key   = "VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38="
+agent_ids      = ["win-host"]
+```
+
+Replace `relay.example.com` with a hostname whose A/AAAA record points at this host. Let's Encrypt does not issue certificates for raw IP addresses — for IP-only setups see [Insecure mode](#insecure-mode-no-tls).
+
+#### 3. Start the service
+
+```sh
+sudo mkdir -p /var/lib/obcmd/autocert
+brew services start obcmdd
+```
+
+#### 4. Verify
+
+```sh
+$ curl -sI https://relay.example.com/healthz
+HTTP/2 200
+```
+
+The first request may take a few seconds while autocert obtains the Let's Encrypt cert.
+
+#### Insecure mode (no TLS)
+
+If you want to run on an IP or a private network without a domain, set `insecure = true` in `obcmdd.toml`. The relay then listens on plain HTTP at `insecure_addr` (default `:8080`). Command and result payloads are still AES-256-GCM end-to-end encrypted, but the transport itself is unauthenticated — only safe on a trusted network.
+
+---
+
+### Agent (`obcmd-agent`)
+
+#### 1. Write `C:\ProgramData\obcmd\agent.toml`
+
+```toml
+relay_url     = "https://relay.example.com"
+agent_id      = "win-host"
+agent_key     = "TgRBa44lpHynVM8iyymXu1raDoxB6MaTajXjSF0e3pU="   # key #1 from the relay
+payload_key   = "NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30="   # key #3 from the relay
+log_file      = "C:\\ProgramData\\obcmd\\agent.log"
+default_shell = "cmd"   # or "powershell"
+```
+
+#### 2. Install as a Windows service
 
 ```pwsh
-scoop bucket add obay https://github.com/obay/scoop-bucket
-scoop install obay/obcmd-agent
+PS> obcmd-agent install
+service obcmd-agent installed
+service started
 ```
 
-The agent is released for Windows amd64 only.
+#### 3. Verify
 
-### Relay (Linux)
-
-Via Linuxbrew:
-
-```sh
-brew install obay/tap/obcmdd
-```
-
-Or grab the deb/rpm from the [latest release](https://github.com/obay/obcmd/releases):
-
-```sh
-curl -L https://github.com/obay/obcmd/releases/latest/download/obcmdd_<ver>_linux_amd64.tar.gz | tar -xz
-sudo install obcmdd /usr/local/bin/
-sudo cp deploy/obcmdd.service /etc/systemd/system/
-```
-
-## Configure (one-time)
-
-Generate keys once on any machine — `obcmd keygen --count 3` prints three 32-byte base64 keys. Use them as:
-
-| Key            | Relay (`obcmdd.toml`) | Agent (`agent.toml`) | Operator (`config.toml`) |
-| -------------- | :------------------: | :-----------------: | :-----------------: |
-| `agent_key`    | ✅                    | ✅                   |                     |
-| `operator_key` | ✅                    |                     | ✅                   |
-| `payload_key`  |                      | ✅                   | ✅                   |
-
-Each example config in this repo (`config.example.*.toml`) shows exactly what goes where.
-
-### Relay
-
-```sh
-sudo useradd -r -s /usr/sbin/nologin obcmd
-sudo mkdir -p /etc/obcmd /var/lib/obcmd/autocert
-sudo cp config.example.obcmdd.toml /etc/obcmd/obcmdd.toml
-sudoedit /etc/obcmd/obcmdd.toml   # paste keys + your domain
-sudo chown -R obcmd:obcmd /var/lib/obcmd
-sudo systemctl enable --now obcmdd
-```
-
-DNS: point your domain at the relay host. Open inbound :80 and :443.
-
-### Windows (agent)
-
-After `scoop install obay/obcmd-agent`:
+Tail the agent log; you should see polling activity and no auth errors:
 
 ```pwsh
-# Edit %PROGRAMDATA%\obcmd\agent.toml (template is written for you).
-# Then, from an elevated PowerShell:
-obcmd-agent install
+Get-Content -Tail 5 -Wait C:\ProgramData\obcmd\agent.log
 ```
 
-### Operator (Mac/Linux)
+Other service controls: `obcmd-agent start`, `obcmd-agent stop`, `obcmd-agent uninstall`.
+
+---
+
+### Operator (`obcmd`)
+
+#### 1. Write the config
+
+Path:
+- `~/.config/obcmd/config.toml` on macOS / Linux
+- `%APPDATA%\obcmd\config.toml` on Windows
+
+```toml
+relay_url    = "https://relay.example.com"
+agent_id     = "win-host"
+operator_key = "VbAj3FqTu59zaoymrkivyYO0fr3EUc8edFBb8C+Xl38="    # key #2 from the relay
+payload_key  = "NDuLm5hXzJwvq3HXGcIcUyNWLNEJuxwbeYDoMygVm30="    # key #3 from the relay
+default_shell        = "cmd"
+default_timeout_secs = 60
+```
+
+#### 2. Verify the end-to-end path
 
 ```sh
-mkdir -p ~/.config/obcmd
-cp config.example.obcmd.toml ~/.config/obcmd/config.toml
-$EDITOR ~/.config/obcmd/config.toml   # paste keys
+$ obcmd status
+relay  https://relay.example.com OK (42ms)
+agent  win-host OK (188ms)
 ```
 
-## Use
+Both lines `OK` means operator → relay → agent → relay → operator works end-to-end. If the relay is OK but the agent is not, the agent isn't polling — check the agent log. If the relay itself is not OK, check DNS and that :443 is reachable.
+
+#### 3. Run commands on the agent
+
+##### `obcmd run`
+
+Executes a command on the agent. Stdout and stderr are returned as separate streams; the CLI exits with the agent-side exit code.
 
 ```sh
-obcmd status                                # liveness probe
-obcmd run "ipconfig /all"                   # cmd.exe
-obcmd run --shell powershell "Get-Process"  # powershell.exe
-obcmd run --timeout 300 -- ipconfig /all    # custom timeout
-obcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
-obcmd pull C:\Windows\System32\drivers\etc\hosts ./hosts.remote
+obcmd run [--shell cmd|powershell] [--timeout SECS] [--cwd DIR] [--json] -- COMMAND...
 ```
 
-Exit code mirrors the agent-side command. Stdout goes to stdout, stderr to stderr, so you can pipe normally:
+Examples:
 
 ```sh
-obcmd run "dir /b C:\Users\Public" | sort
+$ obcmd run "hostname"
+WIN-HOST
+
+$ obcmd run --shell powershell "Get-Process | Sort CPU -desc | Select -First 3"
+...
+
+$ obcmd run --timeout 300 -- msiexec /qn /i C:\install.msi
 ```
+
+Exit codes:
+
+| Code      | Meaning                                  |
+| --------- | ---------------------------------------- |
+| `0`–`255` | Agent-side process exit code             |
+| `124`     | Command timed out on the agent           |
+| `1`       | Transport or config error (operator side) |
+
+##### `obcmd push` / `obcmd pull`
+
+Upload a local file to the agent, or download one from it. End-to-end encrypted; the relay only sees ciphertext.
+
+```sh
+$ obcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
+$ obcmd pull C:\ProgramData\obcmd\agent.log ./agent.log
+```
+
+Hard cap: 16 MiB per file.
+
+##### `--json` (every command)
+
+All commands accept `--json` for scripting. Output becomes a single JSON object on stdout; transport / config errors still set exit code `1`, but agent-side status (`exit_code`, `truncated`, `duration_ms`, …) is carried in the JSON rather than the process exit code.
+
+##### Output limits
+
+Command output is capped at 8 MiB combined (4 MiB each for stdout and stderr). When the cap is hit, the result includes `truncated=true`.
+
+---
+
+## Security
+
+- **Authenticity** — every request is HMAC-signed with `agent_key` or `operator_key`. Timestamp window plus a nonce cache prevent replay.
+- **Confidentiality** — command payloads and results are AES-256-GCM encrypted with `payload_key`. The relay never sees plaintext, so corporate TLS inspection between any party and the relay is harmless.
+- **Trust model** — the agent trusts the system CA store, so corporate MITM CAs work transparently. The AEAD layer above is what keeps that safe.
 
 ## Limits (v1)
 
-- One agent per relay (multi-agent is on the schema, but tested with one).
-- Files: 16 MiB hard cap per push/pull.
-- Command output: 8 MiB cap (stdout+stderr each get half); the `truncated` flag is set when hit.
-- No interactive shells (no PTY).
-- In-memory queue at the relay — restarting the relay drops any in-flight commands.
-
-## Releasing
-
-Tag a release and GitHub Actions does the rest:
-
-```sh
-git tag v0.1.0
-git push --tags
-```
-
-The `.github/workflows/release.yml` workflow runs GoReleaser:
-- Builds `obcmdd` (linux, amd64 + arm64), `obcmd` (macOS + linux + windows, amd64 + arm64), and `obcmd-agent` (windows/amd64 only).
-- Publishes a GitHub Release with archives, deb, rpm, and checksums.
-- Updates the Homebrew tap at `obay/homebrew-tap` (obcmd CLI).
-- Updates the Scoop bucket at `obay/scoop-bucket` (obcmd-agent + obcmd CLI).
-
-Required secret: `TAP_GITHUB_TOKEN` — a PAT with `repo` scope on `obay/homebrew-tap` and `obay/scoop-bucket`. Add it under repo settings → Secrets → Actions.
-
-## Layout
-
-```
-obcmd/
-├── cmd/
-│   ├── obcmd/         CLI (run / push / pull / status / keygen / version)
-│   ├── obcmdd/        relay (serve / keygen / version)
-│   └── obcmd-agent/   agent (run / install / uninstall / service / start / stop)
-├── internal/
-│   ├── api/            wire types + header names
-│   ├── auth/           HMAC sign/verify, nonce cache
-│   ├── crypto/         AES-256-GCM seal/open
-│   └── queue/          in-memory command queue + result store
-├── deploy/             systemd unit, PowerShell installer
-├── .github/workflows/  ci.yml, release.yml
-└── .goreleaser.yaml
-```
-
-## License
-
-MIT.
+- One agent per relay (the wire format is multi-agent; only single-agent is exercised).
+- No interactive shells / no PTY.
+- In-memory queue at the relay — a restart drops in-flight commands.
