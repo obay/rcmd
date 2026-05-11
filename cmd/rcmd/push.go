@@ -13,26 +13,21 @@ import (
 )
 
 func newPushCmd() *cobra.Command {
-	var asJSON bool
+	var (
+		agentFlag string
+		asJSON    bool
+	)
 	cmd := &cobra.Command{
-		Use:   "push LOCAL REMOTE",
+		Use:   "push [flags] LOCAL REMOTE",
 		Short: "Copy a local file to the remote agent",
 		Long: strings.TrimSpace(fmt.Sprintf(`
-DESCRIPTION
-  push reads LOCAL on this machine and writes it to REMOTE on the agent.
-  Max file size: %s (v1 hard cap). The file is encrypted end-to-end —
-  the relay only sees ciphertext.
+push reads LOCAL on this machine and writes it to REMOTE on the agent.
+Max file size: %s (v1 hard cap). The file is encrypted end-to-end —
+the relay only sees ciphertext.
 
 EXAMPLES
   rcmd push ./hosts C:\Windows\System32\drivers\etc\hosts
-  rcmd push --json ./hosts C:\hosts.bak
-  # -> {"kind":"push_result","ok":true,"bytes_written":237,
-  #     "path_local":"./hosts","path_remote":"C:\\hosts.bak",
-  #     "sha256":"<hex>"}
-
-EXIT CODES
-  0   success
-  1   local-read, transport, or agent-side error
+  rcmd push --agent win-host-2 ./hosts C:\hosts.bak
 `, humanBytes(api.MaxFileBytes))),
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
@@ -50,11 +45,15 @@ EXIT CODES
 				return err
 			}
 			sum := sha256.Sum256(data)
-			cl, err := newClient()
+			c, err := newClient()
 			if err != nil {
 				return err
 			}
-			res, err := cl.Run(api.Command{
+			agentID, err := c.resolveAgent(agentFlag)
+			if err != nil {
+				return err
+			}
+			res, err := c.Run(agentID, api.Command{
 				Kind:        api.KindPush,
 				RemotePath:  remote,
 				DataB64:     base64.StdEncoding.EncodeToString(data),
@@ -82,17 +81,18 @@ EXIT CODES
 				return emitJSON(map[string]any{
 					"kind":          "push_result",
 					"ok":            true,
-					"agent_id":      cl.agentID,
+					"agent_id":      agentID,
 					"bytes_written": res.BytesWritten,
 					"path_local":    local,
 					"path_remote":   remote,
 					"sha256":        hex.EncodeToString(sum[:]),
 				})
 			}
-			fmt.Printf("wrote %d bytes to %s on %s\n", res.BytesWritten, remote, cl.agentID)
+			fmt.Printf("wrote %d bytes to %s on %s\n", res.BytesWritten, remote, agentID)
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&agentFlag, "agent", "", "agent ID (default: from state)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit a single JSON object instead of human text")
 	return cmd
 }

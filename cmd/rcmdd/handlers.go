@@ -29,11 +29,31 @@ type server struct {
 func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.healthz)
 	// Operator-initiated:
+	mux.HandleFunc("GET /v1/agents", s.auth(s.recordOperator(s.listAgents)))
 	mux.HandleFunc("POST /v1/agents/{id}/commands", s.auth(s.recordOperator(s.submitCommand)))
 	mux.HandleFunc("GET /v1/agents/{id}/commands/{cid}/result", s.auth(s.recordOperator(s.getResult)))
 	// Agent-initiated:
 	mux.HandleFunc("GET /v1/agents/{id}/poll", s.auth(s.recordAgent(s.poll)))
 	mux.HandleFunc("POST /v1/agents/{id}/results/{cid}", s.auth(s.recordAgent(s.postResult)))
+}
+
+func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {
+	s.seenMu.Lock()
+	out := make([]string, 0, len(s.state.Agents))
+	for name := range s.state.Agents {
+		out = append(out, name)
+	}
+	s.seenMu.Unlock()
+	sortStrings(out)
+	writeJSON(w, http.StatusOK, api.ListAgentsResponse{Agents: out})
+}
+
+func sortStrings(xs []string) {
+	for i := 1; i < len(xs); i++ {
+		for j := i; j > 0 && xs[j-1] > xs[j]; j-- {
+			xs[j-1], xs[j] = xs[j], xs[j-1]
+		}
+	}
 }
 
 func (s *server) healthz(w http.ResponseWriter, r *http.Request) {

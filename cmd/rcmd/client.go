@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,77 +15,75 @@ import (
 	"github.com/obay/rcmd/internal/api"
 	"github.com/obay/rcmd/internal/auth"
 	"github.com/obay/rcmd/internal/crypto"
-	"github.com/spf13/viper"
+	"github.com/obay/rcmd/internal/state"
 )
 
 const userAgent = "rcmd/0.1 (+https://github.com/obay/rcmd)"
 
 type client struct {
-	relayURL    string
-	agentID     string
-	operatorKey []byte
-	payloadKey  []byte
-	http        *http.Client
+	state      *state.OperatorState
+	relayURL   string
+	operatorID string
+	hmacKey    []byte
+	payloadKey []byte
+	http       *http.Client
 }
 
 func newClient() (*client, error) {
-	if err := initConfig(); err != nil {
+	s, err := state.LoadOperator(statePath)
+	if err != nil {
 		return nil, err
 	}
-	relayURL := strings.TrimRight(viper.GetString("relay_url"), "/")
-	if relayURL == "" {
-		return nil, errors.New("config: relay_url is required")
+	if s.RelayURL == "" {
+		return nil, errors.New("state: relay_url is empty")
 	}
-	agentID := viper.GetString("agent_id")
-	if agentID == "" {
-		return nil, errors.New("config: agent_id is required")
+	if s.OperatorID == "" {
+		return nil, errors.New("state: operator_id is empty")
 	}
-	opKeyB64 := viper.GetString("operator_key")
-	plKeyB64 := viper.GetString("payload_key")
-	if opKeyB64 == "" || plKeyB64 == "" {
-		return nil, errors.New("config: operator_key and payload_key are required")
-	}
-	opKey, err := crypto.ParseKey(opKeyB64)
-	if err != nil {
-		return nil, fmt.Errorf("operator_key: %w", err)
-	}
-	plKey, err := crypto.ParseKey(plKeyB64)
-	if err != nil {
-		return nil, fmt.Errorf("payload_key: %w", err)
+	master, err := base64.StdEncoding.DecodeString(s.MasterSecret)
+	if err != nil || len(master) != crypto.MasterSecretBytes {
+		return nil, errors.New("state: master_secret is missing or malformed")
 	}
 	return &client{
-		relayURL:    relayURL,
-		agentID:     agentID,
-		operatorKey: opKey,
-		payloadKey:  plKey,
-		// Long enough to cover poll+result phases; the CLI handles its own
-		// per-step timeouts via context if we need finer control.
+		state:      s,
+		relayURL:   strings.TrimRight(s.RelayURL, "/"),
+		operatorID: s.OperatorID,
+		hmacKey:    crypto.DeriveHMACSubkey(master),
+		payloadKey: crypto.DeriveAEADSubkey(master),
+		// Long enough to cover poll+result phases; per-call timeouts via context.
 		http: &http.Client{Timeout: 0, Transport: defaultTransport()},
 	}, nil
 }
 
 func defaultTransport() http.RoundTripper {
-	// http.DefaultTransport honors HTTP_PROXY/HTTPS_PROXY env vars,
-	// which matters if the corporate firewall forces a proxy. We use
-	// the system trust store (default), so MITM TLS inspection just
-	// works at the transport layer; confidentiality comes from AEAD.
 	return http.DefaultTransport
 }
 
-// Run submits the command and waits for the result.
-func (c *client) Run(cmd api.Command) (*api.Result, error) {
+// resolveAgent picks an agent ID: explicit flag wins, otherwise state's
+// default_agent. Returns an actionable error if neither is set.
+func (c *client) resolveAgent(flagValue string) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+	if c.state.DefaultAgent != "" {
+		return c.state.DefaultAgent, nil
+	}
+	return "", errors.New("no agent specified — pass --agent NAME or set a default with 'rcmd set-default-agent NAME'")
+}
+
+// Run submits a command to the named agent and waits for the result.
+func (c *client) Run(agentID string, cmd api.Command) (*api.Result, error) {
 	env, err := crypto.Seal(c.payloadKey, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("seal: %w", err)
 	}
 	body, _ := json.Marshal(env)
-	url := fmt.Sprintf("%s/v1/agents/%s/commands", c.relayURL, c.agentID)
+	url := fmt.Sprintf("%s/v1/agents/%s/commands", c.relayURL, agentID)
 	var sub api.SubmitCommandResponse
 	if err := c.doJSON(http.MethodPost, url, body, &sub); err != nil {
 		return nil, fmt.Errorf("submit: %w", err)
 	}
-	// Long-poll for the result; loop in case of 202 timeouts.
-	resultURL := fmt.Sprintf("%s/v1/agents/%s/commands/%s/result", c.relayURL, c.agentID, sub.CommandID)
+	resultURL := fmt.Sprintf("%s/v1/agents/%s/commands/%s/result", c.relayURL, agentID, sub.CommandID)
 	deadline := time.Now().Add(time.Duration(cmd.TimeoutSecs+30) * time.Second)
 	for {
 		var rr api.ResultResponse
@@ -104,6 +103,15 @@ func (c *client) Run(cmd api.Command) (*api.Result, error) {
 		}
 		return &res, nil
 	}
+}
+
+// ListAgents fetches the relay's seen-agents list.
+func (c *client) ListAgents() ([]string, error) {
+	var out api.ListAgentsResponse
+	if err := c.doJSON(http.MethodGet, c.relayURL+"/v1/agents", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Agents, nil
 }
 
 func (c *client) doJSON(method, url string, body []byte, into any) error {
@@ -131,7 +139,7 @@ func (c *client) doJSONRaw(method, url string, body []byte, into any) (int, erro
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if err := auth.Sign(req, api.IdentityOperator, c.operatorKey, body); err != nil {
+	if err := auth.Sign(req, c.operatorID, c.hmacKey, body); err != nil {
 		return 0, err
 	}
 	resp, err := c.http.Do(req)

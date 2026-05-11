@@ -97,3 +97,10 @@ type ResultResponse struct {
 	Status   string   `json:"status"` // "done"
 	Envelope Envelope `json:"envelope"`
 }
+
+// ListAgentsResponse is what the relay returns from GET /v1/agents.
+// Names only — no metadata, no keys. Used by 'rcmd list-agents' so an
+// operator can see which agents have been seen by the relay.
+type ListAgentsResponse struct {
+	Agents []string `json:"agents"`
+}

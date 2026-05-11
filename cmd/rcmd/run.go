@@ -1,80 +1,59 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/obay/rcmd/internal/api"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func newRunCmd() *cobra.Command {
 	var (
-		shell    string
-		timeout  int
-		cwd      string
-		asJSON   bool
+		agentFlag string
+		shell     string
+		timeout   int
+		cwd       string
+		asJSON    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "run [flags] COMMAND...",
-		Short: "Run a command on the remote agent and print its output",
+		Short: "Run a command on a remote agent and print its output",
 		Long: strings.TrimSpace(`
 DESCRIPTION
-  run sends COMMAND to the remote agent, waits for it to finish, prints
+  run sends COMMAND to a remote agent, waits for it to finish, prints
   stdout and stderr, and exits with the agent-side exit code.
 
 EXAMPLES
-  # Basic command, default shell from config (cmd.exe on the agent):
-  rcmd run "ipconfig /all"
-
-  # Pick the shell per-call:
+  rcmd run "hostname"                                # default agent
+  rcmd run --agent win-host-1 "ipconfig /all"
   rcmd run --shell powershell "Get-Process | Sort CPU -desc | Select -First 5"
-
-  # Long-running command with a custom timeout (seconds):
   rcmd run --timeout 300 -- ipconfig /all
-
-  # Working directory on the agent:
   rcmd run --cwd 'C:\Users\Public' "dir"
-
-  # Machine-readable output for scripts and AI agents:
   rcmd run --json "hostname"
-  # -> {"kind":"exec_result","exit_code":0,"stdout":"WIN-HOST\r\n",
-  #     "stderr":"","duration_ms":42,"truncated":false}
-
-OUTPUT
-  Text mode  (default): stdout to stdout, stderr to stderr; process
-                        exits with the agent-side exit code.
-  JSON mode  (--json):  single JSON object to stdout, no stream split.
-                        Process exits 0 if the round-trip succeeded
-                        (read exit_code from the JSON to learn the
-                        agent-side status); exits 1 only on transport
-                        or config errors.
 
 EXIT CODES (text mode)
   0..255  agent-side exit code
   124     command timed out on the agent
   1       transport/config error (CLI side)
-
-NOTES
-  Use '--' to stop flag parsing if your command itself starts with '-'.
-  The end-to-end payload is AES-256-GCM encrypted; the relay never
-  sees command text or output in cleartext.
 `),
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl, err := newClient()
+			c, err := newClient()
+			if err != nil {
+				return err
+			}
+			agentID, err := c.resolveAgent(agentFlag)
 			if err != nil {
 				return err
 			}
 			if shell == "" {
-				shell = viper.GetString("default_shell")
+				shell = c.state.DefaultShell
 			}
 			if timeout <= 0 {
-				timeout = viper.GetInt("default_timeout_secs")
+				timeout = c.state.DefaultTimeoutSecs
 			}
 			payload := api.Command{
 				Kind:        api.KindExec,
@@ -83,14 +62,14 @@ NOTES
 				TimeoutSecs: timeout,
 				Cwd:         cwd,
 			}
-			res, err := cl.Run(payload)
+			res, err := c.Run(agentID, payload)
 			if err != nil {
 				return err
 			}
 			if asJSON {
 				return emitJSON(map[string]any{
 					"kind":        "exec_result",
-					"agent_id":    cl.agentID,
+					"agent_id":    agentID,
 					"shell":       shell,
 					"cmd":         payload.Cmd,
 					"exit_code":   res.ExitCode,
@@ -123,7 +102,8 @@ NOTES
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&shell, "shell", "", "shell to use on the agent (cmd | powershell)")
+	cmd.Flags().StringVar(&agentFlag, "agent", "", "agent ID (default: from state)")
+	cmd.Flags().StringVar(&shell, "shell", "", "shell on the agent (cmd | powershell)")
 	cmd.Flags().IntVarP(&timeout, "timeout", "t", 0, "kill the command after this many seconds")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "working directory on the agent")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit a single JSON object instead of streaming text")
@@ -139,11 +119,4 @@ func humanBytes(n int) string {
 		return fmt.Sprintf("%dKiB", n/k)
 	}
 	return fmt.Sprintf("%dMiB", n/(k*k))
-}
-
-// emitJSON writes v as indented JSON to stdout. Used by all --json paths.
-func emitJSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
 }

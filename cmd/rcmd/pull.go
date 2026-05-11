@@ -13,36 +13,35 @@ import (
 )
 
 func newPullCmd() *cobra.Command {
-	var asJSON bool
+	var (
+		agentFlag string
+		asJSON    bool
+	)
 	cmd := &cobra.Command{
-		Use:   "pull REMOTE LOCAL",
+		Use:   "pull [flags] REMOTE LOCAL",
 		Short: "Copy a remote file from the agent to a local path",
 		Long: strings.TrimSpace(fmt.Sprintf(`
-DESCRIPTION
-  pull reads REMOTE on the agent and writes it to LOCAL on this machine.
-  Max file size: %s (v1 hard cap). The file is encrypted end-to-end —
-  the relay only sees ciphertext.
+pull reads REMOTE on the agent and writes it to LOCAL on this machine.
+Max file size: %s (v1 hard cap). The file is encrypted end-to-end —
+the relay only sees ciphertext.
 
 EXAMPLES
-  rcmd pull C:\Windows\System32\drivers\etc\hosts ./hosts.remote
-  rcmd pull --json C:\hosts.bak ./hosts.bak
-  # -> {"kind":"pull_result","ok":true,"size":237,
-  #     "path_remote":"C:\\hosts.bak","path_local":"./hosts.bak",
-  #     "sha256":"<hex>"}
-
-EXIT CODES
-  0   success
-  1   remote-read, transport, or local-write error
+  rcmd pull C:\ProgramData\rcmd\agent.log ./agent.log
+  rcmd pull --agent win-host-2 C:\hosts.bak ./hosts.bak
 `, humanBytes(api.MaxFileBytes))),
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			remote, local := args[0], args[1]
-			cl, err := newClient()
+			c, err := newClient()
 			if err != nil {
 				return err
 			}
-			res, err := cl.Run(api.Command{
+			agentID, err := c.resolveAgent(agentFlag)
+			if err != nil {
+				return err
+			}
+			res, err := c.Run(agentID, api.Command{
 				Kind:        api.KindPull,
 				RemotePath:  remote,
 				TimeoutSecs: 60,
@@ -77,17 +76,18 @@ EXIT CODES
 				return emitJSON(map[string]any{
 					"kind":        "pull_result",
 					"ok":          true,
-					"agent_id":    cl.agentID,
+					"agent_id":    agentID,
 					"size":        res.Size,
 					"path_remote": remote,
 					"path_local":  local,
 					"sha256":      hex.EncodeToString(sum[:]),
 				})
 			}
-			fmt.Printf("read %d bytes from %s on %s -> %s\n", res.Size, remote, cl.agentID, local)
+			fmt.Printf("read %d bytes from %s on %s -> %s\n", res.Size, remote, agentID, local)
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&agentFlag, "agent", "", "agent ID (default: from state)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit a single JSON object instead of human text")
 	return cmd
 }

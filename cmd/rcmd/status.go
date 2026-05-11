@@ -11,30 +11,22 @@ import (
 )
 
 func newStatusCmd() *cobra.Command {
-	var asJSON bool
+	var (
+		agentFlag string
+		asJSON    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Probe the relay and run a quick liveness check on the agent",
+		Short: "Probe the relay and round-trip a quick liveness check via an agent",
 		Long: strings.TrimSpace(`
-DESCRIPTION
-  status performs two checks:
-    1. GET /healthz on the relay (unauthenticated)         — confirms
-       the relay process is up and its TLS / DNS is fine.
-    2. Run "echo ok" on the agent through the encrypted    — confirms
-       command path                                          the agent
-                                                              is polling
-                                                              and all
-                                                              keys match.
+status performs two checks:
+  1. GET /healthz on the relay (unauthenticated): confirms the
+     relay process is up and its TLS / DNS is fine.
+  2. Run "echo ok" through the encrypted command path on the target
+     agent: confirms the agent is polling and all keys match.
 
-  If step 2 hangs, the agent is offline or the firewall is dropping its
-  poll requests. If step 1 fails, the relay or DNS / TLS is broken.
-
-EXAMPLES
-  rcmd status
-  rcmd status --json
-  # -> {"kind":"status","relay_url":"https://relay.example.com",
-  #     "relay_ok":true,"relay_latency_ms":42,
-  #     "agent_id":"win-host","agent_ok":true,"agent_latency_ms":188}
+If step 2 hangs, the agent is offline or the firewall is dropping its
+poll requests. If step 1 fails, the relay or DNS / TLS is broken.
 
 EXIT CODES
   0   both relay and agent OK
@@ -42,19 +34,23 @@ EXIT CODES
 `),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl, err := newClient()
+			c, err := newClient()
+			if err != nil {
+				return err
+			}
+			agentID, err := c.resolveAgent(agentFlag)
 			if err != nil {
 				return err
 			}
 
 			out := map[string]any{
 				"kind":      "status",
-				"relay_url": cl.relayURL,
-				"agent_id":  cl.agentID,
+				"relay_url": c.relayURL,
+				"agent_id":  agentID,
 			}
 
 			t0 := time.Now()
-			resp, err := http.Get(cl.relayURL + "/healthz")
+			resp, err := http.Get(c.relayURL + "/healthz")
 			relayLatency := time.Since(t0).Milliseconds()
 			relayOK := err == nil && resp != nil && resp.StatusCode == 200
 			if resp != nil {
@@ -71,7 +67,7 @@ EXIT CODES
 			}
 
 			if !asJSON {
-				fmt.Printf("relay  %s ", cl.relayURL)
+				fmt.Printf("relay  %s ", c.relayURL)
 				if relayOK {
 					fmt.Printf("OK (%dms)\n", relayLatency)
 				} else if err != nil {
@@ -91,7 +87,7 @@ EXIT CODES
 			}
 
 			t1 := time.Now()
-			res, runErr := cl.Run(api.Command{
+			res, runErr := c.Run(agentID, api.Command{
 				Kind:        api.KindExec,
 				Cmd:         "echo ok",
 				Shell:       "cmd",
@@ -110,7 +106,7 @@ EXIT CODES
 			}
 
 			if !asJSON {
-				fmt.Printf("agent  %s ", cl.agentID)
+				fmt.Printf("agent  %s ", agentID)
 				if agentOK {
 					fmt.Printf("OK (%dms)\n", agentLatency)
 				} else if runErr != nil {
@@ -128,6 +124,7 @@ EXIT CODES
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&agentFlag, "agent", "", "agent ID (default: from state)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit a single JSON object")
 	return cmd
 }
