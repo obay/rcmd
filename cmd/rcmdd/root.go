@@ -35,8 +35,8 @@ Day-2 ops:
   rcmdd forget X    # remove a name from the seen list
   rcmdd status      # health check
 
-The 'serve' subcommand is invoked by systemd / brew services; it is
-not meant to be run by humans.
+The 'serve' subcommand is invoked by systemd; it is not meant to be
+run by humans.
 `),
 		SilenceUsage: true,
 	}

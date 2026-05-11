@@ -127,6 +127,21 @@ func installService(binPath string) error {
 	return nil
 }
 
+// serviceExists reports whether the SCM service is registered.
+func serviceExists() bool {
+	m, err := mgr.Connect()
+	if err != nil {
+		return false
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(ServiceName)
+	if err != nil {
+		return false
+	}
+	s.Close()
+	return true
+}
+
 // uninstallService stops + deletes the SCM service. No-op safe if the
 // service does not exist (returns the open error).
 func uninstallService() error {

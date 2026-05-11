@@ -101,6 +101,18 @@ Refuses to overwrite an existing state file unless --force is given.
 			if err != nil {
 				return fmt.Errorf("locate executable: %w", err)
 			}
+			// If the service is already installed (typical when re-joining
+			// with --force), tear it down first so it picks up the new
+			// state on the fresh start.
+			if serviceExists() {
+				if !force {
+					return fmt.Errorf("Windows service %q is already installed; run 'rcmd-agent leave' first, or pass --force to reinstall", ServiceName)
+				}
+				fmt.Printf("service %q already installed; reinstalling to pick up new state\n", ServiceName)
+				if err := uninstallService(); err != nil {
+					return fmt.Errorf("uninstall existing service: %w", err)
+				}
+			}
 			return installService(exe)
 		},
 	}
