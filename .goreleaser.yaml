@@ -98,6 +98,11 @@ nfpms:
     contents:
       - src: deploy/rcmdd.service
         dst: /lib/systemd/system/rcmdd.service
+    scripts:
+      preinstall:  deploy/preinst.sh
+      postinstall: deploy/postinst.sh
+      preremove:   deploy/prerm.sh
+      postremove:  deploy/postrm.sh
 
 checksum:
   name_template: checksums.txt
@@ -116,6 +121,11 @@ changelog:
 # Homebrew tap at github.com/obay/homebrew-tap.
 # directory: Formula is required because the tap has a Formula/ subdir;
 # when present, brew only looks there and ignores repo-root .rb files.
+#
+# Only the operator CLI ships via brew. The relay (rcmdd) is a system
+# daemon that needs a dedicated service user, privileged port :443, and
+# /etc/ and /var/lib/ paths — none of which brew can provide cleanly.
+# Use the .deb / .rpm for rcmdd; see the README.
 brews:
   - name: rcmd
     ids: [rcmd-cli]
@@ -133,34 +143,8 @@ brews:
     test: |
       system "#{bin}/rcmd", "version"
 
-  - name: rcmdd
-    ids: [rcmdd]
-    directory: Formula
-    repository:
-      owner: obay
-      name: homebrew-tap
-      branch: main
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/obay/rcmd
-    description: HTTPS relay for the rcmd remote-exec system (Linux only)
-    license: MIT
-    install: |
-      bin.install "rcmdd"
-      pkgshare.install "deploy/rcmdd.service" if File.exist?("deploy/rcmdd.service")
-    caveats: |
-      Run once before starting the service:
-        sudo rcmdd init --domain relay.example.com
-      Then:
-        brew services start rcmdd
-    service: |
-      run [opt_bin/"rcmdd", "serve"]
-      keep_alive true
-      log_path var/"log/rcmdd.log"
-      error_log_path var/"log/rcmdd.err.log"
-    test: |
-      system "#{bin}/rcmdd", "version"
-
-# rcmd-agent is Windows-only; no Homebrew formula.
+# rcmdd ships only via .deb / .rpm / tarball — see nfpms above.
+# rcmd-agent is Windows-only — see scoops below.
 
 # Scoop bucket at github.com/obay/scoop-bucket. Windows users install
 # the agent with: scoop bucket add obay https://github.com/obay/scoop-bucket
